@@ -5,6 +5,9 @@ import {
   startOfMonth,
   endOfMonth,
   addDays,
+  subDays,
+  subWeeks,
+  subMonths,
   differenceInCalendarDays,
   isSameDay,
   parseISO,
@@ -48,4 +51,4 @@ export function startOfMonthKey(date = new Date()) {
   return format(startOfMonth(date), 'yyyy-MM-dd')
 }
 
-export { format, addDays, startOfWeek, endOfWeek, endOfMonth, parseISO, differenceInCalendarDays }
+export { format, addDays, startOfWeek, endOfWeek, endOfMonth, parseISO, differenceInCalendarDays, subDays, subWeeks, subMonths }

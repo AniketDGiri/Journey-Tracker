@@ -5,6 +5,7 @@ import PhaseSettings from './PhaseSettings'
 import Heatmap from './Heatmap'
 import TaskSection from '../common/TaskSection'
 import ScheduledMini from '../common/ScheduledMini'
+import Backlog from '../common/Backlog'
 import { todayKey, dateKey, weekKey, monthKey, weekRangeLabel, monthLabel, daysUntil, format, endOfWeek, endOfMonth } from '../../utils/dates'
 import { computeStreak, heatmapData } from '../../utils/progress'
 import { parseISO } from 'date-fns'
@@ -126,6 +127,8 @@ export default function StudyPlan() {
           </button>
         ))}
       </div>
+
+      <Backlog filter="study" />
 
       <div className="task-grid">
         <TaskSection

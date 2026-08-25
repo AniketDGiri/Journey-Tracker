@@ -4,6 +4,7 @@ import TaskSection from '../common/TaskSection'
 import ScheduledMini from '../common/ScheduledMini'
 import { todayKey, dateKey, weekKey, weekRangeLabel, endOfWeek } from '../../utils/dates'
 import { buildGoogleCalendarLink } from '../../utils/googleCalendar'
+import Backlog from '../common/Backlog'
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
@@ -100,6 +101,8 @@ export default function LifeTasks() {
           ))}
         </div>
       </div>
+
+      <Backlog filter="life" />
 
       <div className="task-grid task-grid-2">
         <TaskSection
