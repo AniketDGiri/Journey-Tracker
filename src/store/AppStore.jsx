@@ -1,0 +1,117 @@
+import { createContext, useContext, useMemo, useCallback } from 'react'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+import { defaultPhases, defaultStudyTasks, defaultLifeTasks } from '../utils/seedData'
+import { uid } from '../utils/id'
+
+const AppStoreContext = createContext(null)
+
+export function AppStoreProvider({ children }) {
+  const [phases, setPhases] = useLocalStorage('jt.phases', defaultPhases)
+  const [studyTasks, setStudyTasks] = useLocalStorage('jt.studyTasks', defaultStudyTasks)
+  const [studyCompletions, setStudyCompletions] = useLocalStorage('jt.studyCompletions', {})
+  const [lifeTasks, setLifeTasks] = useLocalStorage('jt.lifeTasks', defaultLifeTasks)
+  const [lifeCompletions, setLifeCompletions] = useLocalStorage('jt.lifeCompletions', {})
+  const [scheduledTasks, setScheduledTasks] = useLocalStorage('jt.scheduled', [])
+
+  const addTask = useCallback(
+    (setter) => (task) => {
+      setter((prev) => [...prev, { id: uid(), ...task }])
+    },
+    []
+  )
+
+  const removeTask = useCallback(
+    (setter, completionSetter) => (taskId) => {
+      setter((prev) => prev.filter((t) => t.id !== taskId))
+      completionSetter((prev) => {
+        const next = { ...prev }
+        delete next[taskId]
+        return next
+      })
+    },
+    []
+  )
+
+  const toggleCompletion = useCallback(
+    (setter) => (taskId, periodKey) => {
+      setter((prev) => {
+        const taskMap = { ...(prev[taskId] || {}) }
+        taskMap[periodKey] = !taskMap[periodKey]
+        return { ...prev, [taskId]: taskMap }
+      })
+    },
+    []
+  )
+
+  const addScheduledTask = useCallback(
+    (task) => setScheduledTasks((prev) => [...prev, { id: uid(), done: false, ...task }]),
+    [setScheduledTasks]
+  )
+
+  const removeScheduledTask = useCallback(
+    (taskId) => setScheduledTasks((prev) => prev.filter((t) => t.id !== taskId)),
+    [setScheduledTasks]
+  )
+
+  const toggleScheduledTask = useCallback(
+    (taskId) =>
+      setScheduledTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t))
+      ),
+    [setScheduledTasks]
+  )
+
+  const value = useMemo(
+    () => ({
+      phases,
+      setPhases,
+      studyTasks,
+      addStudyTask: addTask(setStudyTasks),
+      removeStudyTask: removeTask(setStudyTasks, setStudyCompletions),
+      studyCompletions,
+      toggleStudyCompletion: toggleCompletion(setStudyCompletions),
+
+      lifeTasks,
+      addLifeTask: addTask(setLifeTasks),
+      removeLifeTask: removeTask(setLifeTasks, setLifeCompletions),
+      lifeCompletions,
+      toggleLifeCompletion: toggleCompletion(setLifeCompletions),
+
+      scheduledTasks,
+      addScheduledTask,
+      removeScheduledTask,
+      toggleScheduledTask,
+
+      exportData: () => ({
+        phases,
+        studyTasks,
+        studyCompletions,
+        lifeTasks,
+        lifeCompletions,
+        scheduledTasks,
+        exportedAt: new Date().toISOString(),
+      }),
+      importData: (data) => {
+        if (!data) return
+        if (data.phases) setPhases(data.phases)
+        if (data.studyTasks) setStudyTasks(data.studyTasks)
+        if (data.studyCompletions) setStudyCompletions(data.studyCompletions)
+        if (data.lifeTasks) setLifeTasks(data.lifeTasks)
+        if (data.lifeCompletions) setLifeCompletions(data.lifeCompletions)
+        if (data.scheduledTasks) setScheduledTasks(data.scheduledTasks)
+      },
+    }),
+    [
+      phases, studyTasks, studyCompletions, lifeTasks, lifeCompletions,
+      scheduledTasks, addScheduledTask, removeScheduledTask, toggleScheduledTask,
+    ]
+  )
+
+  return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>
+}
+
+export function useAppStore() {
+  const ctx = useContext(AppStoreContext)
+  if (!ctx) throw new Error('useAppStore must be used within AppStoreProvider')
+  return ctx
+}
