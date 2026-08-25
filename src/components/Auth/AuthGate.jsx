@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useAppStore } from '../../store/AppStore'
 
 function GoogleIcon() {
@@ -11,8 +12,17 @@ function GoogleIcon() {
   )
 }
 
+const ERROR_MESSAGES = {
+  'auth/popup-blocked':        'Your browser blocked the sign-in popup. Please allow popups for this site and try again.',
+  'auth/popup-closed-by-user': 'Sign-in was cancelled. Click the button again to try.',
+  'auth/unauthorized-domain':  'This domain is not authorised in Firebase. Add it under Authentication → Settings → Authorized domains in the Firebase console.',
+  'auth/network-request-failed': 'Network error — check your connection and try again.',
+}
+
 export default function AuthGate({ children }) {
   const { user, authLoading, signIn } = useAppStore()
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
 
   if (authLoading) {
     return (
@@ -24,6 +34,19 @@ export default function AuthGate({ children }) {
   }
 
   if (!user) {
+    const handleSignIn = async () => {
+      setError(null)
+      setLoading(true)
+      try {
+        await signIn()
+      } catch (err) {
+        const msg = ERROR_MESSAGES[err.code] ?? `Sign-in failed: ${err.message}`
+        setError(msg)
+      } finally {
+        setLoading(false)
+      }
+    }
+
     return (
       <div className="auth-screen">
         <div className="auth-card">
@@ -32,10 +55,15 @@ export default function AuthGate({ children }) {
           <p className="auth-sub">
             Sign in with Google to save your progress and sync across all your devices.
           </p>
-          <button className="auth-google-btn" onClick={signIn}>
-            <GoogleIcon />
-            Continue with Google
+          <button
+            className="auth-google-btn"
+            onClick={handleSignIn}
+            disabled={loading}
+          >
+            {loading ? <div className="auth-spinner auth-spinner-sm" /> : <GoogleIcon />}
+            {loading ? 'Signing in…' : 'Continue with Google'}
           </button>
+          {error && <p className="auth-error">{error}</p>}
           <p className="auth-note">Your data is stored privately in your account.</p>
         </div>
       </div>
