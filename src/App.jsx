@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { AppStoreProvider } from './store/AppStore'
+import { AppStoreProvider, useAppStore } from './store/AppStore'
+import AuthGate from './components/Auth/AuthGate'
 import StudyPlan from './components/StudyPlan/StudyPlan'
 import LifeTasks from './components/LifeTasks/LifeTasks'
 import Schedule from './components/Schedule/Schedule'
@@ -10,14 +11,15 @@ import './App.css'
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'study', label: 'Study Plan' },
-  { id: 'life', label: 'Life Tasks' },
-  { id: 'schedule', label: 'Schedule' },
+  { id: 'study',     label: 'Study Plan' },
+  { id: 'life',      label: 'Life Tasks' },
+  { id: 'schedule',  label: 'Schedule' },
 ]
 
 function AppInner() {
-  const [tab, setTab] = useState('dashboard')
+  const [tab, setTab]     = useState('dashboard')
   const [theme, setTheme] = useLocalStorage('jt.theme', 'light')
+  const { user, signOut } = useAppStore()
 
   return (
     <div className="app" data-theme={theme}>
@@ -46,14 +48,29 @@ function AppInner() {
           >
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
+          {user && (
+            <div className="user-menu">
+              {user.photoURL && (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName ?? 'User'}
+                  className="user-avatar"
+                  title={user.displayName ?? user.email}
+                />
+              )}
+              <button className="icon-btn" onClick={signOut} title="Sign out">
+                ↩
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       <main className="app-main">
         {tab === 'dashboard' && <Dashboard />}
-        {tab === 'study' && <StudyPlan />}
-        {tab === 'life' && <LifeTasks />}
-        {tab === 'schedule' && <Schedule />}
+        {tab === 'study'     && <StudyPlan />}
+        {tab === 'life'      && <LifeTasks />}
+        {tab === 'schedule'  && <Schedule />}
       </main>
 
       <footer className="app-footer">
@@ -66,7 +83,9 @@ function AppInner() {
 export default function App() {
   return (
     <AppStoreProvider>
-      <AppInner />
+      <AuthGate>
+        <AppInner />
+      </AuthGate>
     </AppStoreProvider>
   )
 }
