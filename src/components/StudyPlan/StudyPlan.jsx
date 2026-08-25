@@ -28,9 +28,15 @@ export default function StudyPlan() {
     removeStudyTask,
     studyCompletions,
     toggleStudyCompletion,
+    addStudySubtask,
+    toggleStudySubtask,
+    removeStudySubtask,
     scheduledTasks,
     toggleScheduledTask,
     removeScheduledTask,
+    addScheduledSubtask,
+    toggleScheduledSubtask,
+    removeScheduledSubtask,
   } = useAppStore()
 
   const [showSettings, setShowSettings] = useState(false)
@@ -135,6 +141,12 @@ export default function StudyPlan() {
           scheduledItems={studySchedDaily}
           onToggleScheduled={toggleScheduledTask}
           onRemoveScheduled={removeScheduledTask}
+          onAddSubtask={addStudySubtask}
+          onToggleSubtask={toggleStudySubtask}
+          onRemoveSubtask={removeStudySubtask}
+          onAddScheduledSubtask={addScheduledSubtask}
+          onToggleScheduledSubtask={toggleScheduledSubtask}
+          onRemoveScheduledSubtask={removeScheduledSubtask}
         />
         <TaskSection
           title="Weekly"
@@ -149,6 +161,12 @@ export default function StudyPlan() {
           scheduledItems={studySchedWeekly}
           onToggleScheduled={toggleScheduledTask}
           onRemoveScheduled={removeScheduledTask}
+          onAddSubtask={addStudySubtask}
+          onToggleSubtask={toggleStudySubtask}
+          onRemoveSubtask={removeStudySubtask}
+          onAddScheduledSubtask={addScheduledSubtask}
+          onToggleScheduledSubtask={toggleScheduledSubtask}
+          onRemoveScheduledSubtask={removeScheduledSubtask}
         />
         <TaskSection
           title="Monthly"
@@ -163,6 +181,12 @@ export default function StudyPlan() {
           scheduledItems={studySchedMonthly}
           onToggleScheduled={toggleScheduledTask}
           onRemoveScheduled={removeScheduledTask}
+          onAddSubtask={addStudySubtask}
+          onToggleSubtask={toggleStudySubtask}
+          onRemoveSubtask={removeStudySubtask}
+          onAddScheduledSubtask={addScheduledSubtask}
+          onToggleScheduledSubtask={toggleScheduledSubtask}
+          onRemoveScheduledSubtask={removeScheduledSubtask}
         />
       </div>
 

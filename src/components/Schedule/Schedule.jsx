@@ -37,7 +37,55 @@ function CategoryBadge({ categoryId }) {
   )
 }
 
-function ScheduleGroup({ title, subtitle, accent, tasks, onToggle, onRemove, emptyText }) {
+function SubtaskBlock({ taskId, subtasks = [], onAdd, onToggle, onRemove }) {
+  const [draft, setDraft]   = useState('')
+  const [adding, setAdding] = useState(false)
+
+  const submit = (e) => {
+    e.preventDefault()
+    const v = draft.trim()
+    if (!v) { setAdding(false); return }
+    onAdd?.(taskId, v)
+    setDraft('')
+    setAdding(false)
+  }
+
+  return (
+    <div className="subtask-block">
+      {subtasks.length > 0 && (
+        <ul className="subtask-list">
+          {subtasks.map((sub) => (
+            <li key={sub.id} className={`subtask-row${sub.done ? ' done' : ''}`}>
+              <label className="task-label">
+                <input type="checkbox" checked={sub.done} onChange={() => onToggle?.(taskId, sub.id)} />
+                <span>{sub.title}</span>
+              </label>
+              <button type="button" className="icon-btn subtask-del" onClick={() => onRemove?.(taskId, sub.id)}>✕</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {adding ? (
+        <form className="subtask-add-form" onSubmit={submit}>
+          <input
+            autoFocus
+            type="text"
+            placeholder="Subtask name…"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => { if (!draft.trim()) setAdding(false) }}
+          />
+          <button type="submit">Add</button>
+          <button type="button" className="icon-btn" onClick={() => setAdding(false)}>✕</button>
+        </form>
+      ) : (
+        <button type="button" className="subtask-new-btn" onClick={() => setAdding(true)}>+ subtask</button>
+      )}
+    </div>
+  )
+}
+
+function ScheduleGroup({ title, subtitle, accent, tasks, onToggle, onRemove, onAddSubtask, onToggleSubtask, onRemoveSubtask, emptyText }) {
   const pending = tasks.filter((t) => !t.done).length
 
   return (
@@ -57,32 +105,35 @@ function ScheduleGroup({ title, subtitle, accent, tasks, onToggle, onRemove, emp
         <p className="schedule-empty">{emptyText}</p>
       ) : (
         <ul className="task-list">
-          {tasks.map((task) => (
-            <li key={task.id} className={`task-row ${task.done ? 'done' : ''}`}>
-              <label className="task-label">
-                <input
-                  type="checkbox"
-                  checked={task.done}
-                  onChange={() => onToggle(task.id)}
+          {tasks.map((task) => {
+            const subtasks = task.subtasks || []
+            const subDone  = subtasks.filter((s) => s.done).length
+            return (
+              <li key={task.id} className="task-item">
+                <div className={`task-row${task.done ? ' done' : ''}`}>
+                  <label className="task-label">
+                    <input type="checkbox" checked={task.done} onChange={() => onToggle(task.id)} />
+                    <span>{task.title}</span>
+                    {subtasks.length > 0 && (
+                      <span className="subtask-count">{subDone}/{subtasks.length}</span>
+                    )}
+                  </label>
+                  <div className="task-row-actions">
+                    {task.category && <CategoryBadge categoryId={task.category} />}
+                    <span className="schedule-date-badge">{format(parseISO(task.dueDate), 'MMM d')}</span>
+                    <button type="button" className="icon-btn" title="Remove task" onClick={() => onRemove(task.id)}>✕</button>
+                  </div>
+                </div>
+                <SubtaskBlock
+                  taskId={task.id}
+                  subtasks={subtasks}
+                  onAdd={onAddSubtask}
+                  onToggle={onToggleSubtask}
+                  onRemove={onRemoveSubtask}
                 />
-                <span>{task.title}</span>
-              </label>
-              <div className="task-row-actions">
-                {task.category && <CategoryBadge categoryId={task.category} />}
-                <span className="schedule-date-badge">
-                  {format(parseISO(task.dueDate), 'MMM d')}
-                </span>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  title="Remove task"
-                  onClick={() => onRemove(task.id)}
-                >
-                  ✕
-                </button>
-              </div>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>
@@ -90,8 +141,10 @@ function ScheduleGroup({ title, subtitle, accent, tasks, onToggle, onRemove, emp
 }
 
 export default function Schedule() {
-  const { scheduledTasks, addScheduledTask, removeScheduledTask, toggleScheduledTask } =
-    useAppStore()
+  const {
+    scheduledTasks, addScheduledTask, removeScheduledTask, toggleScheduledTask,
+    addScheduledSubtask, toggleScheduledSubtask, removeScheduledSubtask,
+  } = useAppStore()
 
   const [title, setTitle]       = useState('')
   const [dueDate, setDueDate]   = useState(todayKey())
@@ -192,6 +245,9 @@ export default function Schedule() {
             tasks={overdue}
             onToggle={toggleScheduledTask}
             onRemove={removeScheduledTask}
+            onAddSubtask={addScheduledSubtask}
+            onToggleSubtask={toggleScheduledSubtask}
+            onRemoveSubtask={removeScheduledSubtask}
           />
         )}
         <ScheduleGroup
@@ -228,6 +284,9 @@ export default function Schedule() {
             tasks={upcomingT}
             onToggle={toggleScheduledTask}
             onRemove={removeScheduledTask}
+            onAddSubtask={addScheduledSubtask}
+            onToggleSubtask={toggleScheduledSubtask}
+            onRemoveSubtask={removeScheduledSubtask}
           />
         )}
       </div>

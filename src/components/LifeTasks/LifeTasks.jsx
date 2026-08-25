@@ -40,7 +40,9 @@ function lifeFilterToScheduledCats(filter) {
 export default function LifeTasks() {
   const {
     lifeTasks, addLifeTask, removeLifeTask, lifeCompletions, toggleLifeCompletion,
+    addLifeSubtask, toggleLifeSubtask, removeLifeSubtask,
     scheduledTasks, toggleScheduledTask, removeScheduledTask,
+    addScheduledSubtask, toggleScheduledSubtask, removeScheduledSubtask,
   } = useAppStore()
 
   const [category, setCategory] = useState('all')
@@ -114,6 +116,12 @@ export default function LifeTasks() {
           scheduledItems={lifeSchedDaily}
           onToggleScheduled={toggleScheduledTask}
           onRemoveScheduled={removeScheduledTask}
+          onAddSubtask={addLifeSubtask}
+          onToggleSubtask={toggleLifeSubtask}
+          onRemoveSubtask={removeLifeSubtask}
+          onAddScheduledSubtask={addScheduledSubtask}
+          onToggleScheduledSubtask={toggleScheduledSubtask}
+          onRemoveScheduledSubtask={removeScheduledSubtask}
         />
         <TaskSection
           title="Weekly"
@@ -129,6 +137,12 @@ export default function LifeTasks() {
           scheduledItems={lifeSchedWeekly}
           onToggleScheduled={toggleScheduledTask}
           onRemoveScheduled={removeScheduledTask}
+          onAddSubtask={addLifeSubtask}
+          onToggleSubtask={toggleLifeSubtask}
+          onRemoveSubtask={removeLifeSubtask}
+          onAddScheduledSubtask={addScheduledSubtask}
+          onToggleScheduledSubtask={toggleScheduledSubtask}
+          onRemoveScheduledSubtask={removeScheduledSubtask}
         />
       </div>
 

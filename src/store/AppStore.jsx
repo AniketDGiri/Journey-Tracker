@@ -7,23 +7,21 @@ import { uid } from '../utils/id'
 
 const AppStoreContext = createContext(null)
 
-const EMPTY = {
-  phases:           null,
-  studyTasks:       null,
-  studyCompletions: null,
-  lifeTasks:        null,
-  lifeCompletions:  null,
-  scheduledTasks:   null,
-}
-
 function userDocRef(userId) {
   return doc(db, 'users', userId, 'appData', 'main')
 }
 
+// Immutably update the subtasks array of one task inside a task list
+function patchSubtasks(tasks, taskId, updater) {
+  return tasks.map((t) =>
+    t.id !== taskId ? t : { ...t, subtasks: updater(t.subtasks || []) }
+  )
+}
+
 export function AppStoreProvider({ children }) {
-  const [user, setUser]             = useState(null)
+  const [user, setUser]               = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [dataLoaded, setDataLoaded] = useState(false)
+  const [dataLoaded, setDataLoaded]   = useState(false)
 
   const [phases, setPhases]                     = useState(defaultPhases)
   const [studyTasks, setStudyTasks]             = useState(defaultStudyTasks)
@@ -41,10 +39,10 @@ export function AppStoreProvider({ children }) {
           const snap = await getDoc(userDocRef(u.uid))
           if (snap.exists()) {
             const d = snap.data()
-            setPhases(d.phases           ?? defaultPhases)
-            setStudyTasks(d.studyTasks   ?? defaultStudyTasks)
+            setPhases(d.phases                     ?? defaultPhases)
+            setStudyTasks(d.studyTasks             ?? defaultStudyTasks)
             setStudyCompletions(d.studyCompletions ?? {})
-            setLifeTasks(d.lifeTasks     ?? defaultLifeTasks)
+            setLifeTasks(d.lifeTasks               ?? defaultLifeTasks)
             setLifeCompletions(d.lifeCompletions   ?? {})
             setScheduledTasks(d.scheduledTasks     ?? [])
           }
@@ -80,7 +78,7 @@ export function AppStoreProvider({ children }) {
     return () => clearTimeout(debounceRef.current)
   }, [phases, studyTasks, studyCompletions, lifeTasks, lifeCompletions, scheduledTasks, user, dataLoaded])
 
-  // ── Mutation helpers (unchanged) ──────────────────────────────────────────
+  // ── Task mutation helpers ─────────────────────────────────────────────────
   const addTask = useCallback(
     (setter) => (task) => setter((prev) => [...prev, { id: uid(), ...task }]),
     []
@@ -109,16 +107,15 @@ export function AppStoreProvider({ children }) {
     []
   )
 
+  // ── Scheduled task mutations ──────────────────────────────────────────────
   const addScheduledTask = useCallback(
     (task) => setScheduledTasks((prev) => [...prev, { id: uid(), done: false, ...task }]),
     [setScheduledTasks]
   )
-
   const removeScheduledTask = useCallback(
     (taskId) => setScheduledTasks((prev) => prev.filter((t) => t.id !== taskId)),
     [setScheduledTasks]
   )
-
   const toggleScheduledTask = useCallback(
     (taskId) => setScheduledTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t))
@@ -126,6 +123,47 @@ export function AppStoreProvider({ children }) {
     [setScheduledTasks]
   )
 
+  // ── Subtask mutations ─────────────────────────────────────────────────────
+  const addStudySubtask = useCallback(
+    (taskId, title) => setStudyTasks((p) => patchSubtasks(p, taskId, (s) => [...s, { id: uid(), title, done: false }])),
+    [setStudyTasks]
+  )
+  const toggleStudySubtask = useCallback(
+    (taskId, subId) => setStudyTasks((p) => patchSubtasks(p, taskId, (s) => s.map((x) => x.id === subId ? { ...x, done: !x.done } : x))),
+    [setStudyTasks]
+  )
+  const removeStudySubtask = useCallback(
+    (taskId, subId) => setStudyTasks((p) => patchSubtasks(p, taskId, (s) => s.filter((x) => x.id !== subId))),
+    [setStudyTasks]
+  )
+
+  const addLifeSubtask = useCallback(
+    (taskId, title) => setLifeTasks((p) => patchSubtasks(p, taskId, (s) => [...s, { id: uid(), title, done: false }])),
+    [setLifeTasks]
+  )
+  const toggleLifeSubtask = useCallback(
+    (taskId, subId) => setLifeTasks((p) => patchSubtasks(p, taskId, (s) => s.map((x) => x.id === subId ? { ...x, done: !x.done } : x))),
+    [setLifeTasks]
+  )
+  const removeLifeSubtask = useCallback(
+    (taskId, subId) => setLifeTasks((p) => patchSubtasks(p, taskId, (s) => s.filter((x) => x.id !== subId))),
+    [setLifeTasks]
+  )
+
+  const addScheduledSubtask = useCallback(
+    (taskId, title) => setScheduledTasks((p) => patchSubtasks(p, taskId, (s) => [...s, { id: uid(), title, done: false }])),
+    [setScheduledTasks]
+  )
+  const toggleScheduledSubtask = useCallback(
+    (taskId, subId) => setScheduledTasks((p) => patchSubtasks(p, taskId, (s) => s.map((x) => x.id === subId ? { ...x, done: !x.done } : x))),
+    [setScheduledTasks]
+  )
+  const removeScheduledSubtask = useCallback(
+    (taskId, subId) => setScheduledTasks((p) => patchSubtasks(p, taskId, (s) => s.filter((x) => x.id !== subId))),
+    [setScheduledTasks]
+  )
+
+  // ── Auth helpers ──────────────────────────────────────────────────────────
   const signIn  = useCallback(() => signInWithPopup(auth, googleProvider), [])
   const signOut = useCallback(() => firebaseSignOut(auth), [])
 
@@ -139,17 +177,20 @@ export function AppStoreProvider({ children }) {
       removeStudyTask:       removeTask(setStudyTasks, setStudyCompletions),
       studyCompletions,
       toggleStudyCompletion: toggleCompletion(setStudyCompletions),
+      addStudySubtask, toggleStudySubtask, removeStudySubtask,
 
       lifeTasks,
       addLifeTask:          addTask(setLifeTasks),
       removeLifeTask:       removeTask(setLifeTasks, setLifeCompletions),
       lifeCompletions,
       toggleLifeCompletion: toggleCompletion(setLifeCompletions),
+      addLifeSubtask, toggleLifeSubtask, removeLifeSubtask,
 
       scheduledTasks,
       addScheduledTask,
       removeScheduledTask,
       toggleScheduledTask,
+      addScheduledSubtask, toggleScheduledSubtask, removeScheduledSubtask,
 
       exportData: () => ({
         phases, studyTasks, studyCompletions,
@@ -170,7 +211,11 @@ export function AppStoreProvider({ children }) {
       user, authLoading, signIn, signOut,
       phases, studyTasks, studyCompletions,
       lifeTasks, lifeCompletions,
-      scheduledTasks, addScheduledTask, removeScheduledTask, toggleScheduledTask,
+      scheduledTasks,
+      addScheduledTask, removeScheduledTask, toggleScheduledTask,
+      addStudySubtask, toggleStudySubtask, removeStudySubtask,
+      addLifeSubtask, toggleLifeSubtask, removeLifeSubtask,
+      addScheduledSubtask, toggleScheduledSubtask, removeScheduledSubtask,
     ]
   )
 
