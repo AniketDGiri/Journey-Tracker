@@ -67,11 +67,21 @@ export default function PersonalBoard({ tasks, sections, update, remove, today, 
                     </span>
                     <CalendarCell task={t} />
                   </footer>
+                  <select
+                    className="board-move"
+                    value={t.section}
+                    onChange={(e) => update(t.id, { section: e.target.value })}
+                    title="Move to another section"
+                  >
+                    {sections.map((s) => (
+                      <option key={s.id} value={s.id}>Move to {s.name}</option>
+                    ))}
+                  </select>
                 </article>
               )
             })}
 
-            {cards.length === 0 && <p className="board-empty">Drop tasks here</p>}
+            {cards.length === 0 && <p className="board-empty">Nothing here yet</p>}
           </div>
         )
       })}
