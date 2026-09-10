@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { CalendarCell } from './PersonalList'
 
-export default function PersonalBoard({ tasks, sections, update, remove, today, addSection }) {
+export default function PersonalBoard({ tasks, sections, projects = [], update, remove, today, addSection }) {
   const [dragId, setDragId] = useState(null)
   const [overId, setOverId] = useState(null)
   const [newSection, setNewSection] = useState('')
@@ -35,11 +35,12 @@ export default function PersonalBoard({ tasks, sections, update, remove, today, 
             </header>
 
             {cards.map((t) => {
-              const overdue = t.dueDate && t.dueDate < today && section.id !== 'done'
+              const isDone = section.id === 'done'
+              const overdue = t.dueDate && t.dueDate < today && !isDone
               return (
                 <article
                   key={t.id}
-                  className={`board-card ${dragId === t.id ? 'board-card-drag' : ''}`}
+                  className={`board-card ${isDone ? 'board-card-done' : ''} ${dragId === t.id ? 'board-card-drag' : ''}`}
                   draggable
                   onDragStart={() => setDragId(t.id)}
                   onDragEnd={() => setDragId(null)}
@@ -47,7 +48,7 @@ export default function PersonalBoard({ tasks, sections, update, remove, today, 
                   <div className="board-card-top">
                     <input
                       type="checkbox"
-                      checked={section.id === 'done'}
+                      checked={isDone}
                       title="Mark done"
                       onChange={(e) => update(t.id, { section: e.target.checked ? 'done' : 'todo' })}
                     />
@@ -58,6 +59,11 @@ export default function PersonalBoard({ tasks, sections, update, remove, today, 
                     {t.priority && <span className={`chip chip-${t.priority.toLowerCase()}`}>{t.priority}</span>}
                     {t.effort && <span className={`chip chip-${t.effort.toLowerCase()}`}>{t.effort}</span>}
                     {t.category && <span className="chip chip-cat">{t.category}</span>}
+                    {t.projectId && (
+                      <span className="chip chip-proj">
+                        📁 {projects.find((p) => p.id === t.projectId)?.name ?? 'Project'}
+                      </span>
+                    )}
                   </div>
                   <footer className="board-card-foot">
                     <span className={overdue ? 'board-due board-due-over' : 'board-due'}>

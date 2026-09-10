@@ -13,6 +13,8 @@ import { DEFAULT_TIME_CONFIG } from '../utils/timeBlocks'
 
 const AppStoreContext = createContext(null)
 
+export const DEFAULT_CATEGORIES = ['Office', 'Personal', 'Project', 'Health', 'Finance', 'Home', 'Errands']
+
 export const DEFAULT_SECTIONS = [
   { id: 'todo', name: 'To do' },
   { id: 'inprogress', name: 'In progress' },
@@ -23,6 +25,8 @@ const EMPTY = {
   settings: DEFAULT_SETTINGS,
   personalTasks: [],
   personalSections: DEFAULT_SECTIONS,
+  personalCategories: DEFAULT_CATEGORIES,
+  projects: [],
   timeLog: {},
   timeConfig: DEFAULT_TIME_CONFIG,
   tasks: [],
@@ -66,6 +70,8 @@ export function AppStoreProvider({ children }) {
             settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) },
             personalTasks: d.personalTasks ?? [],
             personalSections: d.personalSections ?? DEFAULT_SECTIONS,
+            personalCategories: d.personalCategories ?? DEFAULT_CATEGORIES,
+            projects: d.projects ?? [],
             timeLog: d.timeLog ?? {},
             timeConfig: { ...DEFAULT_TIME_CONFIG, ...(d.timeConfig ?? {}) },
             tasks: d.tasks ?? [],
@@ -232,6 +238,7 @@ export function AppStoreProvider({ children }) {
     const goals = listOps('goals')
     const revisions = listOps('revisions')
     const personal = listOps('personalTasks')
+    const projects = listOps('projects')
     return {
       user, authLoading, today,
       signIn: () => signInWithPopup(auth, googleProvider),
@@ -251,6 +258,28 @@ export function AppStoreProvider({ children }) {
       addPersonalTask: personal.add,
       updatePersonalTask: personal.update,
       removePersonalTask: personal.remove,
+      projects: data.projects,
+      addProject: projects.add,
+      updateProject: projects.update,
+      // Deleting a project releases its tasks rather than destroying them.
+      removeProject: (id) =>
+        patch({
+          projects: data.projects.filter((x) => x.id !== id),
+          personalTasks: data.personalTasks.map((t) =>
+            t.projectId === id ? { ...t, projectId: null } : t
+          ),
+        }),
+
+      personalCategories: data.personalCategories,
+      addPersonalCategory: (name) =>
+        setData((p) =>
+          p.personalCategories.includes(name)
+            ? p
+            : { ...p, personalCategories: [...p.personalCategories, name] }
+        ),
+      removePersonalCategory: (name) =>
+        patch({ personalCategories: data.personalCategories.filter((c) => c !== name) }),
+
       personalSections: data.personalSections,
       addPersonalSection: (name) =>
         patch({ personalSections: [...data.personalSections, { id: uid(), name }] }),
@@ -311,6 +340,8 @@ export function AppStoreProvider({ children }) {
           settings: { ...DEFAULT_SETTINGS, ...(incoming.settings ?? {}) },
           personalTasks: incoming.personalTasks ?? [],
           personalSections: incoming.personalSections ?? DEFAULT_SECTIONS,
+          personalCategories: incoming.personalCategories ?? DEFAULT_CATEGORIES,
+          projects: incoming.projects ?? [],
           timeLog: incoming.timeLog ?? {},
           timeConfig: { ...DEFAULT_TIME_CONFIG, ...(incoming.timeConfig ?? {}) },
           tasks: incoming.tasks ?? [],
