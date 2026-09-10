@@ -3,6 +3,7 @@ import { addDays, format, parseISO } from 'date-fns'
 import { useAppStore } from '../../store/AppStore'
 import { Bar, Empty, Stat, pct } from '../common/ui'
 import { QUADRANTS, summariseDay, summariseRange } from '../../utils/timeBlocks'
+import { isOverdue } from '../../utils/taskDates'
 
 const RANGES = [
   { days: 7, label: 'Last 7 days' },
@@ -41,9 +42,7 @@ export default function PersonalDashboard() {
   const avgQ2 = (list) =>
     list.length ? list.reduce((a, d) => a + d.pct.q2, 0) / list.length : null
 
-  const overdue = personalTasks.filter(
-    (t) => t.dueDate && t.dueDate < stats.today.key && t.section !== 'done'
-  ).length
+  const overdue = personalTasks.filter((t) => isOverdue(t, stats.today.key)).length
   const doneCount = personalTasks.filter((t) => t.section === 'done').length
 
   const byCategory = useMemo(() => {

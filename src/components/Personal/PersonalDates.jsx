@@ -3,6 +3,7 @@ import { differenceInCalendarDays, format, parseISO } from 'date-fns'
 import { useAppStore } from '../../store/AppStore'
 import { Empty } from '../common/ui'
 import TaskTable from './TaskTable'
+import { coveredDays, isOverdue, timeOf } from '../../utils/taskDates'
 
 const FILTERS = [
   { id: 'open', label: 'Open' },
@@ -34,12 +35,21 @@ export default function PersonalDates() {
 
     const map = new Map()
     for (const t of shown) {
-      const k = t.dueDate || 'none'
-      if (!map.has(k)) map.set(k, [])
-      map.get(k).push(t)
+      // A task that runs over several days appears on each of them, so "what am
+      // I on today" is answered without hunting back to its start date.
+      const days = coveredDays(t)
+      if (days.length === 0) {
+        if (!map.has('none')) map.set('none', [])
+        map.get('none').push(t)
+        continue
+      }
+      for (const d of days) {
+        if (!map.has(d)) map.set(d, [])
+        map.get(d).push(t)
+      }
     }
     for (const list of map.values()) {
-      list.sort((a, b) => (a.startTime || '99:99').localeCompare(b.startTime || '99:99'))
+      list.sort((a, b) => (timeOf(a.start) || '99:99').localeCompare(timeOf(b.start) || '99:99'))
     }
     // Dated groups in date order; undated collected at the end.
     return [...map.entries()]
@@ -47,10 +57,10 @@ export default function PersonalDates() {
       .map(([key, list]) => ({ key, list }))
   }, [personalTasks, filter])
 
-  const overdue = personalTasks.filter(
-    (t) => t.dueDate && t.dueDate < today && t.section !== 'done'
+  const overdue = personalTasks.filter((t) => isOverdue(t, today)).length
+  const dueToday = personalTasks.filter(
+    (t) => t.section !== 'done' && coveredDays(t).includes(today)
   ).length
-  const dueToday = personalTasks.filter((t) => t.dueDate === today && t.section !== 'done').length
 
   return (
     <div className="dates-wrap">
@@ -76,7 +86,7 @@ export default function PersonalDates() {
       {groups.length === 0 ? (
         <Empty>
           Nothing to show. Tasks from the List, Board and Projects views all appear here once
-          they have a date.
+          they have a start or end time.
         </Empty>
       ) : (
         <div className="table-scroll">

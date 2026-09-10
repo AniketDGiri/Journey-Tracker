@@ -1,3 +1,5 @@
+import { dayOf, isAllDay, timeOf } from './taskDates'
+
 // Stays in UTC: going through local time shifts the result back a day for any
 // timezone ahead of UTC, and Google treats an all-day event's end as exclusive.
 function nextDay(date) {
@@ -7,12 +9,14 @@ function nextDay(date) {
 
 /** Opens Google Calendar with the event prefilled — the user presses Save. */
 export function calendarLink(task) {
-  if (!task.dueDate) return null
+  const startDay = dayOf(task.start) || dayOf(task.end)
+  if (!startDay) return null
+  const endDay = dayOf(task.end) || startDay
   const stamp = (d, t) => `${d.replace(/-/g, '')}${t ? `T${t.replace(':', '')}00` : ''}`
-  const dates =
-    task.startTime && task.endTime
-      ? `${stamp(task.dueDate, task.startTime)}/${stamp(task.dueDate, task.endTime)}`
-      : `${stamp(task.dueDate)}/${stamp(nextDay(task.dueDate))}`
+  // An all-day span ends the day after the last day, since Google's end is exclusive.
+  const dates = isAllDay(task)
+    ? `${stamp(startDay)}/${stamp(nextDay(endDay))}`
+    : `${stamp(startDay, timeOf(task.start) || '00:00')}/${stamp(endDay, timeOf(task.end) || timeOf(task.start) || '00:00')}`
   const params = new URLSearchParams({
     action: 'TEMPLATE',
     text: task.title,

@@ -20,7 +20,7 @@ const VIEWS = [
 
 const BLANK = {
   title: '', section: 'todo', priority: 'Medium', effort: 'Medium',
-  category: '', dueDate: '', startTime: '', endTime: '', notes: '', projectId: '',
+  category: '', start: '', end: '', notes: '', projectId: '',
 }
 
 export default function Personal() {
@@ -37,7 +37,7 @@ export default function Personal() {
     e.preventDefault()
     if (!draft.title.trim()) return
     addPersonalTask({ ...draft, title: draft.title.trim(), projectId: draft.projectId || null })
-    setDraft({ ...BLANK, section: draft.section, dueDate: draft.dueDate })
+    setDraft({ ...BLANK, section: draft.section, start: draft.start })
   }
   const set = (k) => (e) => setDraft((p) => ({ ...p, [k]: e.target.value }))
 
@@ -93,9 +93,8 @@ export default function Personal() {
             <option value="">No project</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          <input className="input" type="date" value={draft.dueDate} onChange={set('dueDate')} title="Date" />
-          <input className="input input-time" type="time" value={draft.startTime} onChange={set('startTime')} title="Start time" />
-          <input className="input input-time" type="time" value={draft.endTime} onChange={set('endTime')} title="End time" />
+          <input className="input input-dt" type="datetime-local" value={draft.start} onChange={set('start')} title="Starts" />
+          <input className="input input-dt" type="datetime-local" value={draft.end} min={draft.start || undefined} onChange={set('end')} title="Ends" />
           <button className="btn btn-primary" type="submit">Add task</button>
         </form>
       )}

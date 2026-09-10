@@ -7,7 +7,7 @@ const STATUS = ['Idea', 'Planned', 'Active', 'Paused', 'Done']
 
 const BLANK_TASK = {
   title: '', section: 'todo', priority: 'Medium', effort: 'Medium',
-  category: '', dueDate: '', startTime: '', endTime: '', notes: '',
+  category: '', start: '', end: '', notes: '',
 }
 
 export default function Projects() {
@@ -40,7 +40,7 @@ export default function Projects() {
     e.preventDefault()
     if (!draft.title.trim() || !active) return
     addPersonalTask({ ...draft, title: draft.title.trim(), projectId: active.id })
-    setDraft({ ...BLANK_TASK, section: draft.section, dueDate: draft.dueDate })
+    setDraft({ ...BLANK_TASK, section: draft.section, start: draft.start })
   }
   const set = (k) => (e) => setDraft((p) => ({ ...p, [k]: e.target.value }))
 
@@ -141,9 +141,8 @@ export default function Projects() {
               value={draft.category}
               onChange={(v) => setDraft((p) => ({ ...p, category: v }))}
             />
-            <input className="input" type="date" value={draft.dueDate} onChange={set('dueDate')} title="Date" />
-            <input className="input input-time" type="time" value={draft.startTime} onChange={set('startTime')} title="Start time" />
-            <input className="input input-time" type="time" value={draft.endTime} onChange={set('endTime')} title="End time" />
+            <input className="input input-dt" type="datetime-local" value={draft.start} onChange={set('start')} title="Starts" />
+            <input className="input input-dt" type="datetime-local" value={draft.end} min={draft.start || undefined} onChange={set('end')} title="Ends" />
             <button className="btn btn-primary" type="submit">Add task</button>
           </form>
 

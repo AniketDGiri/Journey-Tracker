@@ -1829,3 +1829,22 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .board-card-done { opacity: 0.68; }
 .board-card-done .board-card-title { text-decoration: line-through; color: var(--text-faint); }
 .board-card-done:hover { opacity: 1; }
+
+/* ===== Start / end date-time fields ===== */
+.input-dt { min-width: 205px; }
+.cell-dt { min-width: 185px; }
+
+.span-chip {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 1px 6px;
+  background: var(--accent-light);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .input-dt { min-width: 0; width: 100%; }
+}

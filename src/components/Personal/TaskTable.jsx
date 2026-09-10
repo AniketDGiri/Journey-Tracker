@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { GrowText } from '../common/ui'
 import { useAppStore } from '../../store/AppStore'
 import { calendarLink } from '../../utils/googleCalendar'
+import { isOverdue, rangeLabel, spansDays } from '../../utils/taskDates'
 
 const NEW = '__new__'
 
@@ -58,7 +59,7 @@ export const PRIORITY = ['High', 'Medium', 'Low']
 export const EFFORT = ['Small', 'Medium', 'Large']
 
 export function CalendarCell({ task }) {
-  if (!task.dueDate) return <span className="muted">—</span>
+  if (!task.start && !task.end) return <span className="muted">—</span>
   return (
     <a
       className="link-btn"
@@ -78,9 +79,9 @@ export function CalendarCell({ task }) {
  */
 export default function TaskTable({
   tasks, sections, projects = [], update, remove, today,
-  showProject = false, showSection = true, showDate = true, emptyLabel = 'No tasks here.',
+  showProject = false, showSection = true, emptyLabel = 'No tasks here.',
 }) {
-  const cols = 8 + (showDate ? 1 : 0) + (showProject ? 1 : 0) + (showSection ? 1 : 0)
+  const cols = 9 + (showProject ? 1 : 0) + (showSection ? 1 : 0)
 
   return (
     <table className="tbl">
@@ -88,9 +89,9 @@ export default function TaskTable({
         <tr>
           <th />
           <th className="th-text">Name</th>
-          {showDate && <th>Date</th>}
-          <th>Start</th>
-          <th>End</th>
+          <th>Starts</th>
+          <th>Ends</th>
+          <th>When</th>
           <th>Priority</th>
           <th>Effort</th>
           <th>Category</th>
@@ -106,7 +107,7 @@ export default function TaskTable({
         )}
         {tasks.map((t) => {
           const isDone = t.section === 'done'
-          const overdue = t.dueDate && t.dueDate < today && !isDone
+          const overdue = isOverdue(t, today)
           return (
             <tr key={t.id} className={`${isDone ? 'row-done' : ''} ${overdue ? 'row-alert' : ''}`}>
               <td className="cell-center">
@@ -120,11 +121,27 @@ export default function TaskTable({
               <td className="td-text">
                 <GrowText value={t.title} onChange={(e) => update(t.id, { title: e.target.value })} />
               </td>
-              {showDate && (
-                <td><input className="cell-input" type="date" value={t.dueDate ?? ''} onChange={(e) => update(t.id, { dueDate: e.target.value })} /></td>
-              )}
-              <td><input className="cell-input cell-narrow" type="time" value={t.startTime ?? ''} onChange={(e) => update(t.id, { startTime: e.target.value })} /></td>
-              <td><input className="cell-input cell-narrow" type="time" value={t.endTime ?? ''} onChange={(e) => update(t.id, { endTime: e.target.value })} /></td>
+              <td>
+                <input
+                  className="cell-input cell-dt"
+                  type="datetime-local"
+                  value={t.start ?? ''}
+                  onChange={(e) => update(t.id, { start: e.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="cell-input cell-dt"
+                  type="datetime-local"
+                  value={t.end ?? ''}
+                  min={t.start || undefined}
+                  onChange={(e) => update(t.id, { end: e.target.value })}
+                />
+              </td>
+              <td className="nowrap">
+                {rangeLabel(t)}
+                {spansDays(t) && <span className="span-chip">multi-day</span>}
+              </td>
               <td>
                 <select className={`cell-input chip chip-${(t.priority ?? '').toLowerCase()}`} value={t.priority ?? 'Medium'} onChange={(e) => update(t.id, { priority: e.target.value })}>
                   {PRIORITY.map((p) => <option key={p}>{p}</option>)}

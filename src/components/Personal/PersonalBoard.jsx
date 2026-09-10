@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { format, parseISO } from 'date-fns'
 import { CalendarCell } from './PersonalList'
+import { isOverdue, rangeLabel, spansDays } from '../../utils/taskDates'
 
 export default function PersonalBoard({ tasks, sections, projects = [], update, remove, today, addSection }) {
   const [dragId, setDragId] = useState(null)
@@ -36,7 +36,7 @@ export default function PersonalBoard({ tasks, sections, projects = [], update, 
 
             {cards.map((t) => {
               const isDone = section.id === 'done'
-              const overdue = t.dueDate && t.dueDate < today && !isDone
+              const overdue = isOverdue(t, today)
               return (
                 <article
                   key={t.id}
@@ -67,9 +67,8 @@ export default function PersonalBoard({ tasks, sections, projects = [], update, 
                   </div>
                   <footer className="board-card-foot">
                     <span className={overdue ? 'board-due board-due-over' : 'board-due'}>
-                      {t.dueDate
-                        ? `${format(parseISO(t.dueDate), 'dd MMM')}${t.startTime ? ` · ${t.startTime}` : ''}`
-                        : 'No date'}
+                      {rangeLabel(t)}
+                      {spansDays(t) && <span className="span-chip">multi-day</span>}
                     </span>
                     <CalendarCell task={t} />
                   </footer>

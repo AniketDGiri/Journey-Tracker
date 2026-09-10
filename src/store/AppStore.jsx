@@ -10,6 +10,7 @@ import { buildMonths, decorateGoals } from '../engine/months'
 import { decorateRevisions } from '../engine/revision'
 import { buildStats } from '../engine/stats'
 import { DEFAULT_TIME_CONFIG } from '../utils/timeBlocks'
+import { migrateTask } from '../utils/taskDates'
 
 const AppStoreContext = createContext(null)
 
@@ -68,7 +69,7 @@ export function AppStoreProvider({ children }) {
           const d = snap.exists() ? snap.data() : {}
           setData({
             settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) },
-            personalTasks: d.personalTasks ?? [],
+            personalTasks: (d.personalTasks ?? []).map(migrateTask),
             personalSections: d.personalSections ?? DEFAULT_SECTIONS,
             personalCategories: d.personalCategories ?? DEFAULT_CATEGORIES,
             projects: d.projects ?? [],
@@ -338,7 +339,7 @@ export function AppStoreProvider({ children }) {
         if (!incoming) return
         setData({
           settings: { ...DEFAULT_SETTINGS, ...(incoming.settings ?? {}) },
-          personalTasks: incoming.personalTasks ?? [],
+          personalTasks: (incoming.personalTasks ?? []).map(migrateTask),
           personalSections: incoming.personalSections ?? DEFAULT_SECTIONS,
           personalCategories: incoming.personalCategories ?? DEFAULT_CATEGORIES,
           projects: incoming.projects ?? [],
