@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppStoreProvider, useAppStore } from './store/AppStore'
 import AuthGate from './components/Auth/AuthGate'
 import Dashboard from './components/Dashboard/Dashboard'
@@ -34,6 +34,23 @@ const WORKSPACES = [
   { id: 'personal', label: '🏠 Personal' },
 ]
 
+// The header's height changes with the breakpoint (tabs wrap onto their own
+// row), so publish it as a variable that sticky card headers can sit below.
+function useHeaderHeight() {
+  const ref = useRef(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const apply = () =>
+      el.closest('.app')?.style.setProperty('--header-h', `${el.offsetHeight}px`)
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  return ref
+}
+
 function AppInner() {
   const [workspace, setWorkspace] = useState('study')
   const [tab, setTab] = useState('dashboard')
@@ -41,10 +58,11 @@ function AppInner() {
   const { user, signOut, stats } = useAppStore()
   const Active = TABS.find((t) => t.id === tab).Component
   const isStudy = workspace === 'study'
+  const headerRef = useHeaderHeight()
 
   return (
     <div className="app" data-theme={theme}>
-      <header className="app-header">
+      <header className="app-header" ref={headerRef}>
         <div className="app-title">
           <span className="app-logo">🧭</span>
           <span>Journey Tracker</span>
