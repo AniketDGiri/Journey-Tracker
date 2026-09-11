@@ -161,12 +161,14 @@ export default function PersonalDashboard() {
         {sum.topTasks.length === 0 ? (
           <Empty>Nothing tracked yet.</Empty>
         ) : (
-          <div className="week-bars">
+          <div className="sink-list">
             {sum.topTasks.map((t) => (
-              <div className="week-bar-row" key={t.task}>
-                <span className="week-bar-label" title={t.task}>{t.task}</span>
-                <Bar value={t.hours / sum.topTasks[0].hours} />
-                <span className="week-bar-pct">{t.hours}h</span>
+              <div className="sink-row" key={t.task}>
+                <span className="sink-name">{t.task}</span>
+                <span className="sink-hours">{t.hours}h</span>
+                <div className="sink-bar">
+                  <Bar value={t.hours / sum.topTasks[0].hours} />
+                </div>
               </div>
             ))}
           </div>

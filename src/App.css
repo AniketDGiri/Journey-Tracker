@@ -890,7 +890,13 @@ textarea.input { resize: vertical; line-height: 1.5; }
   font-size: 12.5px;
 }
 
-.week-bar-label { color: var(--text-muted); white-space: nowrap; }
+.week-bar-label {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 .week-bar-pct { text-align: right; font-weight: 700; }
 
 /* ===== Charts ===== */
@@ -1189,7 +1195,15 @@ textarea.input { resize: vertical; line-height: 1.5; }
 
 .day-task-done .day-task-title { text-decoration: line-through; color: var(--text-faint); }
 .day-task-title { flex: 1; min-width: 0; }
-.day-task-meta { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+.day-task-meta {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 45%;
+}
 
 .day-task-empty {
   font-size: 13px;
@@ -1230,7 +1244,15 @@ textarea.input { resize: vertical; line-height: 1.5; }
 
 .picker-add { color: var(--accent); font-weight: 700; font-size: 12px; }
 .picker-title { flex: 1; min-width: 0; }
-.picker-meta { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+.picker-meta {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 45%;
+}
 
 .picker-controls {
   display: flex;
@@ -1870,3 +1892,30 @@ html, body { max-width: 100%; }
   padding: var(--card-pad-y) var(--card-pad-x) 10px;
   border-radius: var(--radius) var(--radius) 0 0;
 }
+
+/* ===== Biggest time sinks =====
+   Task names here are whatever you typed into a slot — often a full sentence —
+   so the name gets its own line and the bar sits underneath it. */
+.sink-list { display: flex; flex-direction: column; gap: 11px; }
+
+.sink-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  align-items: baseline;
+}
+
+.sink-name {
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.sink-hours {
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sink-bar { grid-column: 1 / -1; }
