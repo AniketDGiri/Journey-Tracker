@@ -297,15 +297,16 @@ const DUE_RANK = { '🔴 Overdue': 0, '🟡 Due today': 1, '🟢 Scheduled': 2 }
 function RevisionSection({ day }) {
   const { revisions, pickRevision, unpickRevision, setRevisionDone } = useAppStore()
   const [q, setQ] = useState('')
-  const [showAll, setShowAll] = useState(false)
+  // Show every open topic by default. Hiding anything not yet due made a topic
+  // you had just added invisible until its first review came round.
+  const [onlyDue, setOnlyDue] = useState(false)
 
   const candidates = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const pickedIds = new Set(day.pickedRevisions.map((r) => r.id))
     return revisions
-      .filter((r) => !pickedIds.has(r.id))
-      // By default only surface what is actually due by this day.
-      .filter((r) => showAll || (r.nextReview && r.nextReview <= day.key))
+      .filter((r) => !pickedIds.has(r.id) && r.status !== '✅ cycle complete')
+      .filter((r) => !onlyDue || (r.nextReview && r.nextReview <= day.key))
       .filter((r) => !needle || `${r.topic} ${r.category ?? ''}`.toLowerCase().includes(needle))
       .sort(
         (a, b) =>
@@ -314,13 +315,15 @@ function RevisionSection({ day }) {
           a.topic.localeCompare(b.topic)
       )
       .slice(0, 50)
-  }, [revisions, q, showAll, day.key, day.pickedRevisions])
+  }, [revisions, q, onlyDue, day.key, day.pickedRevisions])
 
   return (
     <>
       <ul className="day-tasks">
         {day.pickedRevisions.length === 0 && (
-          <li className="day-task-empty">No revisions picked for this day yet.</li>
+          <li className="day-task-empty">
+            No revisions picked for this day yet — each day has its own list, so pick again below.
+          </li>
         )}
         {day.pickedRevisions.map((r) => {
           const done = day.revisionDoneIds.has(r.id)
@@ -360,17 +363,17 @@ function RevisionSection({ day }) {
             onChange={(e) => setQ(e.target.value)}
           />
           <label className="check-line check-line-sm">
-            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-            Show all topics
+            <input type="checkbox" checked={onlyDue} onChange={(e) => setOnlyDue(e.target.checked)} />
+            Only what's due
           </label>
         </div>
         {candidates.length === 0 ? (
           <p className="note note-quiet">
             {revisions.length === 0
               ? 'Your Revision Tracker is empty — add topics there first.'
-              : showAll
-                ? 'Nothing left to pick that matches.'
-                : 'Nothing due by this day — tick "Show all topics" to revise something early.'}
+              : onlyDue
+                ? 'Nothing due by this day — untick "Only what’s due" to revise something early.'
+                : 'Nothing left to pick that matches.'}
           </p>
         ) : (
           <ul className="picker-list">
