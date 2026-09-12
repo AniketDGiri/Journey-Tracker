@@ -27,6 +27,23 @@ export default function StudyLog() {
   const [draft, setDraft] = useState({
     date: stats.today.key, start: '', end: '', duration: '', category: '', task: '', focus: 4, energy: 4, notes: '',
   })
+  // What the timer is tracking. Held on the timer itself once running, so it
+  // survives a reload mid-session.
+  const [pending, setPending] = useState({ task: '', category: '', focus: 4 })
+  const tracking = timer ?? pending
+  const setTracking = (k) => (e) => {
+    const v = k === 'focus' ? Number(e.target.value) : e.target.value
+    if (timer) setTimer({ ...timer, [k]: v })
+    else setPending((p) => ({ ...p, [k]: v }))
+  }
+
+  // Categories already in use, so the timer can offer them without a fixed list.
+  const categories = useMemo(() => {
+    const set = new Set()
+    for (const x of sessions) if (x.category?.trim()) set.add(x.category.trim())
+    for (const t of tasks) if (t.category?.trim()) set.add(t.category.trim())
+    return [...set].sort()
+  }, [sessions, tasks])
 
   useEffect(() => {
     if (!timer) return
@@ -47,8 +64,13 @@ export default function StudyLog() {
       start: clockOf(startedAt),
       end: clockOf(endedAt),
       duration: Math.max(0.01, Math.round(elapsed * 100) / 100),
-      category: '', task: timer.task ?? '', focus: 4, energy: 4, notes: '',
+      category: timer.category ?? '',
+      task: timer.task ?? '',
+      focus: timer.focus ?? 4,
+      energy: 4,
+      notes: '',
     })
+    setPending({ task: timer.task ?? '', category: timer.category ?? '', focus: timer.focus ?? 4 })
     setTimer(null)
   }
 
@@ -70,13 +92,24 @@ export default function StudyLog() {
 
   return (
     <>
+      <datalist id="task-titles">
+        {tasks.map((t) => <option key={t.id} value={t.title} label="task" />)}
+        {revisions.map((r) => <option key={r.id} value={r.topic} label="revision" />)}
+      </datalist>
+      <datalist id="study-categories">
+        {categories.map((c) => <option key={c} value={c} />)}
+      </datalist>
+
       <Card title="⏱️ Study timer" subtitle="Start it when you sit down. Stopping writes the session straight into the log.">
         <div className="timer">
           <div className="timer-clock">{elapsedLabel}</div>
           {timer ? (
             <button className="btn btn-danger" onClick={stopTimer}>⏹ Stop session</button>
           ) : (
-            <button className="btn btn-primary" onClick={() => setTimer({ startedAt: Date.now(), task: draft.task })}>
+            <button
+              className="btn btn-primary"
+              onClick={() => setTimer({ startedAt: Date.now(), ...pending })}
+            >
               ▶ Start session
             </button>
           )}
@@ -85,6 +118,34 @@ export default function StudyLog() {
             <span>Minimum win: <strong>{hrs(settings.minWin)}</strong></span>
           </div>
         </div>
+
+        <div className="timer-fields">
+          <input
+            className="input input-grow"
+            list="task-titles"
+            placeholder="What are you working on? (task or revision topic)"
+            value={tracking.task ?? ''}
+            onChange={setTracking('task')}
+          />
+          <input
+            className="input"
+            list="study-categories"
+            placeholder="Category"
+            value={tracking.category ?? ''}
+            onChange={setTracking('category')}
+          />
+          <label className="check-line check-line-sm">
+            Focus
+            <select className="input input-num" value={tracking.focus ?? 4} onChange={setTracking('focus')}>
+              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+        </div>
+        <p className="note note-quiet">
+          {timer
+            ? 'Still editable while running — whatever is here when you stop is what gets logged.'
+            : 'Set these before you start and the session logs itself with them attached.'}
+        </p>
       </Card>
 
       <Card
@@ -105,10 +166,6 @@ export default function StudyLog() {
             title="Duration (h) — overrides start/end"
           />
           <input className="input input-grow" list="task-titles" placeholder="Task or revision topic" value={draft.task} onChange={set('task')} />
-          <datalist id="task-titles">
-            {tasks.map((t) => <option key={t.id} value={t.title} label="task" />)}
-            {revisions.map((r) => <option key={r.id} value={r.topic} label="revision" />)}
-          </datalist>
           <select className="input input-num" value={draft.focus} onChange={set('focus')} title="Focus 1–5">
             {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
@@ -134,7 +191,7 @@ export default function StudyLog() {
                     <td><input className="cell-input cell-narrow" type="time" value={s.start ?? ''} onChange={(e) => updateSession(s.id, { start: e.target.value, duration: durationFrom(e.target.value, s.end) ?? s.duration })} /></td>
                     <td><input className="cell-input cell-narrow" type="time" value={s.end ?? ''} onChange={(e) => updateSession(s.id, { end: e.target.value, duration: durationFrom(s.start, e.target.value) ?? s.duration })} /></td>
                     <td><input className="cell-input cell-num" type="number" min="0" step="0.25" value={s.duration ?? 0} onChange={(e) => updateSession(s.id, { duration: Number(e.target.value) || 0 })} /></td>
-                    <td><input className="cell-input cell-narrow" value={s.category ?? ''} onChange={(e) => updateSession(s.id, { category: e.target.value })} /></td>
+                    <td><input className="cell-input cell-narrow" list="study-categories" value={s.category ?? ''} onChange={(e) => updateSession(s.id, { category: e.target.value })} /></td>
                     <td><input className="cell-input" list="task-titles" value={s.task ?? ''} onChange={(e) => updateSession(s.id, { task: e.target.value })} /></td>
                     <td>
                       <select className="cell-input cell-num" value={s.focus ?? 3} onChange={(e) => updateSession(s.id, { focus: Number(e.target.value) })}>
