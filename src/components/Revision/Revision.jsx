@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { useAppStore } from '../../store/AppStore'
 import { Card, Empty, GrowText, hrs } from '../common/ui'
 import RevisionDoneDialog from './RevisionDoneDialog'
+import { STUDY_CATEGORY_LIST, StudyCategoryDatalist } from '../common/categories'
 
 const BLANK = { topic: '', category: '', nextReview: '', estHours: 0.25, completed: false, reviewCount: 0, lastReviewed: '', notes: '' }
 
@@ -72,9 +73,10 @@ export default function Revision() {
       actions={due > 0 ? <span className="pill pill-warn">{due} due now</span> : null}
       className="card-wide"
     >
+      <StudyCategoryDatalist />
       <form className="add-form" onSubmit={submit}>
         <input className="input input-grow" placeholder="Topic to revise…" value={draft.topic} onChange={set('topic')} />
-        <input className="input" placeholder="Category" value={draft.category} onChange={set('category')} />
+        <input className="input" list={STUDY_CATEGORY_LIST} placeholder="Category" value={draft.category} onChange={set('category')} />
         <input className="input" type="date" value={draft.nextReview} onChange={set('nextReview')} title="Revise on" />
         <input className="input input-num" type="number" min="0" step="0.25" value={draft.estHours} onChange={set('estHours')} title="Estimated hours per revision" />
         <button className="btn btn-primary" type="submit">Add</button>
@@ -96,7 +98,7 @@ export default function Revision() {
                 <Fragment key={r.id}>
                   <tr className={`${r.completed ? 'row-done' : ''} ${r.status === '🔴 Overdue' ? 'row-alert' : ''}`}>
                     <td className="td-text"><GrowText value={r.topic} onChange={(e) => updateRevision(r.id, { topic: e.target.value })} /></td>
-                    <td><input className="cell-input cell-narrow" value={r.category ?? ''} onChange={(e) => updateRevision(r.id, { category: e.target.value })} /></td>
+                    <td><input className="cell-input cell-narrow" list={STUDY_CATEGORY_LIST} value={r.category ?? ''} onChange={(e) => updateRevision(r.id, { category: e.target.value })} /></td>
                     <td>
                       <input
                         className="cell-input"

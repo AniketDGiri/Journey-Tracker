@@ -1,6 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useAppStore } from '../../store/AppStore'
 import { Card, Empty, GrowText, hrs } from '../common/ui'
+import { STUDY_CATEGORY_LIST, StudyCategoryDatalist } from '../common/categories'
 
 const PRIORITY = ['High', 'Medium', 'Low']
 const STATUS = ['Not Started', 'Planned', 'In Progress', 'Completed', 'Deferred', 'Cancelled']
@@ -78,9 +79,10 @@ export default function TaskBank() {
       }
       className="card-wide"
     >
+      <StudyCategoryDatalist />
       <form className="add-form" onSubmit={submit}>
         <input className="input input-grow" placeholder="Task…" value={draft.title} onChange={set('title')} />
-        <input className="input" placeholder="Category" value={draft.category} onChange={set('category')} />
+        <input className="input" list={STUDY_CATEGORY_LIST} placeholder="Category" value={draft.category} onChange={set('category')} />
         <select className="input" value={draft.priority} onChange={set('priority')}>
           {PRIORITY.map((p) => <option key={p}>{p}</option>)}
         </select>
@@ -116,7 +118,7 @@ export default function TaskBank() {
                     <GrowText value={t.title} onChange={(e) => updateTask(t.id, { title: e.target.value })} />
                   </td>
                   <td>
-                    <input className="cell-input cell-narrow" value={t.category ?? ''} onChange={(e) => updateTask(t.id, { category: e.target.value })} />
+                    <input className="cell-input cell-narrow" list={STUDY_CATEGORY_LIST} value={t.category ?? ''} onChange={(e) => updateTask(t.id, { category: e.target.value })} />
                   </td>
                   <td>
                     <select className="cell-input" value={t.priority ?? 'Medium'} onChange={(e) => updateTask(t.id, { priority: e.target.value })}>

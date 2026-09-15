@@ -3,6 +3,7 @@ import { format } from 'date-fns'
 import { useAppStore } from '../../store/AppStore'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { Card, Empty, GrowText, hrs } from '../common/ui'
+import { STUDY_CATEGORY_LIST, StudyCategoryDatalist } from '../common/categories'
 
 const toMinutes = (t) => {
   const [h, m] = (t || '').split(':').map(Number)
@@ -44,14 +45,6 @@ export default function StudyLog() {
     [tasks]
   )
   const openRevisions = useMemo(() => revisions.filter((r) => !r.completed), [revisions])
-
-  // Categories already in use, so the timer can offer them without a fixed list.
-  const categories = useMemo(() => {
-    const set = new Set()
-    for (const x of sessions) if (x.category?.trim()) set.add(x.category.trim())
-    for (const t of tasks) if (t.category?.trim()) set.add(t.category.trim())
-    return [...set].sort()
-  }, [sessions, tasks])
 
   useEffect(() => {
     if (!timer) return
@@ -104,9 +97,7 @@ export default function StudyLog() {
         {openTasks.map((t) => <option key={t.id} value={t.title} label="task" />)}
         {openRevisions.map((r) => <option key={r.id} value={r.topic} label="revision" />)}
       </datalist>
-      <datalist id="study-categories">
-        {categories.map((c) => <option key={c} value={c} />)}
-      </datalist>
+      <StudyCategoryDatalist />
 
       <Card title="⏱️ Study timer" subtitle="Start it when you sit down. Stopping writes the session straight into the log.">
         <div className="timer">
@@ -137,7 +128,7 @@ export default function StudyLog() {
           />
           <input
             className="input"
-            list="study-categories"
+            list={STUDY_CATEGORY_LIST}
             placeholder="Category"
             value={tracking.category ?? ''}
             onChange={setTracking('category')}
@@ -199,7 +190,7 @@ export default function StudyLog() {
                     <td><input className="cell-input cell-narrow" type="time" value={s.start ?? ''} onChange={(e) => updateSession(s.id, { start: e.target.value, duration: durationFrom(e.target.value, s.end) ?? s.duration })} /></td>
                     <td><input className="cell-input cell-narrow" type="time" value={s.end ?? ''} onChange={(e) => updateSession(s.id, { end: e.target.value, duration: durationFrom(s.start, e.target.value) ?? s.duration })} /></td>
                     <td><input className="cell-input cell-num" type="number" min="0" step="0.25" value={s.duration ?? 0} onChange={(e) => updateSession(s.id, { duration: Number(e.target.value) || 0 })} /></td>
-                    <td><input className="cell-input cell-narrow" list="study-categories" value={s.category ?? ''} onChange={(e) => updateSession(s.id, { category: e.target.value })} /></td>
+                    <td><input className="cell-input cell-narrow" list={STUDY_CATEGORY_LIST} value={s.category ?? ''} onChange={(e) => updateSession(s.id, { category: e.target.value })} /></td>
                     <td><input className="cell-input" list="task-titles" value={s.task ?? ''} onChange={(e) => updateSession(s.id, { task: e.target.value })} /></td>
                     <td>
                       <select className="cell-input cell-num" value={s.focus ?? 3} onChange={(e) => updateSession(s.id, { focus: Number(e.target.value) })}>
