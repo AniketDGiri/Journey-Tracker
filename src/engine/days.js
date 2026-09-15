@@ -36,6 +36,27 @@ export function buildDays({ settings, sessions, tasks, revisions = [], dayInputs
   const taskById = new Map(tasks.map((t) => [t.id, t]))
   const revisionById = new Map(revisions.map((r) => [r.id, r]))
 
+  const range = dayRange(settings, today)
+
+  // How many days each item is picked for. Without an explicit allocation its
+  // estimate is shared evenly across them, so a 6h task spread over 3 days
+  // counts 2h a day rather than 6h on every one of them.
+  const pickCounts = new Map()
+  for (const date of range) {
+    const input = dayInputs[key(date)]
+    if (!input) continue
+    for (const id of [...(input.taskIds ?? []), ...(input.revisionIds ?? [])]) {
+      pickCounts.set(id, (pickCounts.get(id) ?? 0) + 1)
+    }
+  }
+
+  // Hours logged against each item, matched on name the same way the Task Bank does.
+  const loggedByName = new Map()
+  for (const s of sessions) {
+    if (!s.task) continue
+    loggedByName.set(s.task, (loggedByName.get(s.task) ?? 0) + (Number(s.duration) || 0))
+  }
+
   const rows = []
   let prevStreak = 0
   let cumHours = 0
@@ -46,7 +67,7 @@ export function buildDays({ settings, sessions, tasks, revisions = [], dayInputs
   let phoenixEver = 0
   let tokensUsed = 0
 
-  for (const date of dayRange(settings, today)) {
+  for (const date of range) {
     const k = key(date)
     const input = dayInputs[k] || {}
     const future = k > todayK
@@ -61,7 +82,26 @@ export function buildDays({ settings, sessions, tasks, revisions = [], dayInputs
     const revisionDoneIds = new Set(input.revisionDoneIds || [])
     const pickedRevisions = (input.revisionIds || []).map((id) => revisionById.get(id)).filter(Boolean)
 
+    const decorate = (item, name) => {
+      // An empty string is "not set", not zero — Number('') would be 0 and would
+      // silently wipe the even-share fallback.
+      const raw = input.alloc?.[item.id]
+      const blank = raw === undefined || raw === null || raw === ''
+      const explicit = Number(raw)
+      const allocSet = !blank && Number.isFinite(explicit) && explicit >= 0
+      const est = Number(item.estHours) || 0
+      return {
+        ...item,
+        alloc: allocSet ? explicit : round2(est / (pickCounts.get(item.id) || 1)),
+        allocSet,
+        pickedOnDays: pickCounts.get(item.id) || 1,
+        logged: round2(loggedByName.get(name) ?? 0),
+      }
+    }
+
     const actual = future ? 0 : round2(sumBy(daySessions, (s) => s.duration))
+    const pickedTasks = picked.map((t) => decorate(t, t.title))
+    const pickedRevs = pickedRevisions.map((r) => decorate(r, r.topic))
     const tasksPlanned = picked.length
     const tasksCompleted = picked.filter((t) => doneIds.has(t.id)).length
     const revisionsPlanned = pickedRevisions.length
@@ -69,7 +109,7 @@ export function buildDays({ settings, sessions, tasks, revisions = [], dayInputs
 
     // Tasks and revisions are both planned work, so they share one set of totals.
     const planned = round2(
-      sumBy(picked, (t) => t.estHours) + sumBy(pickedRevisions, (r) => r.estHours)
+      sumBy(pickedTasks, (t) => t.alloc) + sumBy(pickedRevs, (r) => r.alloc)
     )
     const itemsPlanned = tasksPlanned + revisionsPlanned
     const itemsCompleted = tasksCompleted + revisionsDone
@@ -152,7 +192,7 @@ export function buildDays({ settings, sessions, tasks, revisions = [], dayInputs
       mainTask: input.mainTask || '', mainTaskDone, notes: input.notes || '',
       tasksPlanned, tasksCompleted, revisionsPlanned, revisionsDone,
       itemsPlanned, itemsCompleted, productivity, xp, win,
-      picked, doneIds, pickedRevisions, revisionDoneIds,
+      picked: pickedTasks, doneIds, pickedRevisions: pickedRevs, revisionDoneIds,
       protect: input.protect === true, protectedByToken,
       streak, cumHours, cumWins, peakStreak, missRun, maxMissRun, phoenixEver,
       minWinLabel: future

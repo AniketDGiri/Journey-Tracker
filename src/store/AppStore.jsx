@@ -191,6 +191,47 @@ export function AppStoreProvider({ children }) {
     []
   )
 
+  /** Hours of an item you intend to do on this day. Blank falls back to an even
+      share of its estimate across the days it is picked for. */
+  const setAllocation = useCallback(
+    (dayKey, itemId, hours) =>
+      setData((p) => {
+        const alloc = { ...(p.dayInputs[dayKey]?.alloc ?? {}) }
+        if (hours === '' || hours === null) delete alloc[itemId]
+        else alloc[itemId] = Number(hours) || 0
+        return mergeDay(p, dayKey, { alloc })
+      }),
+    []
+  )
+
+  // ── task subtasks ─────────────────────────────────────────────────────────
+  const patchSubtasks = (taskId, fn) =>
+    setData((p) => ({
+      ...p,
+      tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, subtasks: fn(t.subtasks ?? []) } : t)),
+    }))
+
+  const addSubtask = useCallback(
+    (taskId, title) => patchSubtasks(taskId, (list) => [...list, { id: uid(), title, done: false }]),
+    []
+  )
+  const toggleSubtask = useCallback(
+    (taskId, subId) =>
+      patchSubtasks(taskId, (list) =>
+        list.map((x) => (x.id === subId ? { ...x, done: !x.done } : x))
+      ),
+    []
+  )
+  const updateSubtask = useCallback(
+    (taskId, subId, title) =>
+      patchSubtasks(taskId, (list) => list.map((x) => (x.id === subId ? { ...x, title } : x))),
+    []
+  )
+  const removeSubtask = useCallback(
+    (taskId, subId) => patchSubtasks(taskId, (list) => list.filter((x) => x.id !== subId)),
+    []
+  )
+
   const pickRevision = useCallback(
     (dayKey, revId) =>
       setData((p) => {
@@ -338,7 +379,8 @@ export function AppStoreProvider({ children }) {
       addRevision: revisions.add, updateRevision: revisions.update, removeRevision: revisions.remove,
 
       setDayInput: mapOps('dayInputs').set,
-      pickTask, unpickTask, setTaskDone,
+      pickTask, unpickTask, setTaskDone, setAllocation,
+      addSubtask, toggleSubtask, updateSubtask, removeSubtask,
       pickRevision, unpickRevision, setRevisionDone, resolveRevision,
       setWeekInput: mapOps('weekInputs').set,
       setMonthInput: mapOps('monthInputs').set,
@@ -366,7 +408,7 @@ export function AppStoreProvider({ children }) {
         })
       },
     }
-  }, [user, authLoading, today, data, derived, patch, listOps, mapOps, pickTask, unpickTask, setTaskDone, pickRevision, unpickRevision, setRevisionDone, resolveRevision])
+  }, [user, authLoading, today, data, derived, patch, listOps, mapOps, pickTask, unpickTask, setTaskDone, setAllocation, addSubtask, toggleSubtask, updateSubtask, removeSubtask, pickRevision, unpickRevision, setRevisionDone, resolveRevision])
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>
 }

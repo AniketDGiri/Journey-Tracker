@@ -14,10 +14,14 @@ const BLANK = {
 }
 
 export default function TaskBank() {
-  const { tasks, sessions, days, addTask, updateTask, removeTask, addSession, stats } = useAppStore()
+  const {
+    tasks, sessions, days, addTask, updateTask, removeTask, addSession, stats,
+    addSubtask, toggleSubtask, updateSubtask, removeSubtask,
+  } = useAppStore()
   const [draft, setDraft] = useState(BLANK)
   const [filter, setFilter] = useState('All')
   const [log, setLog] = useState(null)
+  const [openSubs, setOpenSubs] = useState(null)
 
   // Actual hours roll up from the Study Log by matching the task title.
   const actualByTitle = useMemo(() => {
@@ -103,6 +107,7 @@ export default function TaskBank() {
                 <th>Priority</th>
                 <th>Est.</th>
                 <th>Actual ＋</th>
+                <th>Steps</th>
                 <th>Scheduled</th>
                 <th>Due</th>
                 <th>Status</th>
@@ -140,6 +145,21 @@ export default function TaskBank() {
                     </button>
                   </td>
                   <td className="nowrap">
+                    <button
+                      className="cell-log"
+                      type="button"
+                      onClick={() => setOpenSubs(openSubs === t.id ? null : t.id)}
+                      title="Break this task into steps"
+                    >
+                      <span className="cell-strong">
+                        {(t.subtasks?.length ?? 0) === 0
+                          ? '—'
+                          : `${t.subtasks.filter((x) => x.done).length}/${t.subtasks.length}`}
+                      </span>
+                      <span className="cell-log-add">＋</span>
+                    </button>
+                  </td>
+                  <td className="nowrap">
                     <Scheduled dates={scheduledById.get(t.id)} />
                   </td>
                   <td>
@@ -159,9 +179,22 @@ export default function TaskBank() {
                     <button className="btn-icon" onClick={() => removeTask(t.id)} title="Delete task">✕</button>
                   </td>
                 </tr>
+                {openSubs === t.id && (
+                  <tr className="row-log">
+                    <td colSpan={11}>
+                      <Subtasks
+                        task={t}
+                        add={addSubtask}
+                        toggle={toggleSubtask}
+                        rename={updateSubtask}
+                        remove={removeSubtask}
+                      />
+                    </td>
+                  </tr>
+                )}
                 {log?.taskId === t.id && (
                   <tr className="row-log">
-                    <td colSpan={10}>
+                    <td colSpan={11}>
                       <form className="log-form" onSubmit={submitLog}>
                         <span>Log hours for <strong>{t.title}</strong></span>
                         <input
@@ -201,5 +234,55 @@ function Scheduled({ dates }) {
       {last}
       {dates.length > 1 ? <span className="muted"> +{dates.length - 1}</span> : null}
     </span>
+  )
+}
+
+function Subtasks({ task, add, toggle, rename, remove }) {
+  const [title, setTitle] = useState('')
+  const list = task.subtasks ?? []
+  const done = list.filter((x) => x.done).length
+
+  return (
+    <div className="subs">
+      <div className="subs-head">
+        <strong>Steps for “{task.title}”</strong>
+        {list.length > 0 && <span className="sec-count">{done} of {list.length} done</span>}
+      </div>
+      <ul className="subs-list">
+        {list.length === 0 && (
+          <li className="day-task-empty">
+            No steps yet. These are a checklist only — they don't affect your hours or scores.
+          </li>
+        )}
+        {list.map((x) => (
+          <li className={`sub-row ${x.done ? 'sub-done' : ''}`} key={x.id}>
+            <input type="checkbox" checked={x.done} onChange={() => toggle(task.id, x.id)} />
+            <input
+              className="cell-input"
+              value={x.title}
+              onChange={(e) => rename(task.id, x.id, e.target.value)}
+            />
+            <button className="btn-icon" onClick={() => remove(task.id, x.id)} title="Delete step">✕</button>
+          </li>
+        ))}
+      </ul>
+      <form
+        className="add-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!title.trim()) return
+          add(task.id, title.trim())
+          setTitle('')
+        }}
+      >
+        <input
+          className="input input-grow"
+          placeholder="Add a step…"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <button className="btn btn-primary" type="submit">Add step</button>
+      </form>
+    </div>
   )
 }

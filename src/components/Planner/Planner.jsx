@@ -136,7 +136,7 @@ export default function Planner() {
 }
 
 function DayPanel({ day }) {
-  const { tasks, pickTask, unpickTask, setTaskDone, setDayInput } = useAppStore()
+  const { tasks, pickTask, unpickTask, setTaskDone, setDayInput, setAllocation } = useAppStore()
   const [tab, setTab] = useState('tasks')
   const [q, setQ] = useState('')
   // Backfilling a past day means picking tasks that are already finished.
@@ -173,7 +173,7 @@ function DayPanel({ day }) {
       <div className="day-panel-head">
         <strong>{format(day.date, 'EEEE dd MMM')}</strong>
         <span className={over ? 'day-planned day-planned-over' : 'day-planned'}>
-          Picked {hrs(day.planned)}
+          Planned {hrs(day.planned)}
           {day.target > 0 ? ` of ${hrs(day.target)} target` : ' (bonus day)'}
           {over ? ' — more than you can fit' : ''}
         </span>
@@ -216,8 +216,22 @@ function DayPanel({ day }) {
               />
               <span className="day-task-title">{t.title}</span>
               <span className="day-task-meta">
-                {[t.category, t.priority, t.estHours ? `${t.estHours}h` : null].filter(Boolean).join(' · ')}
+                {[
+                  t.category,
+                  t.priority,
+                  t.estHours ? `${t.logged}h of ${t.estHours}h done` : null,
+                  t.pickedOnDays > 1 ? `over ${t.pickedOnDays} days` : null,
+                ].filter(Boolean).join(' · ')}
               </span>
+              <label className="alloc" title="Hours of this task you plan to do today">
+                <input
+                  className="cell-input cell-num"
+                  type="number" min="0" step="0.25"
+                  value={t.alloc}
+                  onChange={(e) => setAllocation(day.key, t.id, e.target.value)}
+                />
+                h
+              </label>
               <button
                 type="button"
                 className="btn-icon"
@@ -296,7 +310,7 @@ function DayPanel({ day }) {
 const DUE_RANK = { '🔴 Overdue': 0, '🟡 Due today': 1, '🟢 Scheduled': 2 }
 
 function RevisionSection({ day }) {
-  const { revisions, pickRevision, unpickRevision, setRevisionDone, resolveRevision, stats } = useAppStore()
+  const { revisions, pickRevision, unpickRevision, setRevisionDone, resolveRevision, setAllocation, stats } = useAppStore()
   const [doneFor, setDoneFor] = useState(null)
   const [q, setQ] = useState('')
   // Show every open topic by default. Hiding anything not yet due made a topic
@@ -346,6 +360,15 @@ function RevisionSection({ day }) {
                   .filter(Boolean)
                   .join(' · ')}
               </span>
+              <label className="alloc" title="Hours you plan to spend on this today">
+                <input
+                  className="cell-input cell-num"
+                  type="number" min="0" step="0.25"
+                  value={r.alloc}
+                  onChange={(e) => setAllocation(day.key, r.id, e.target.value)}
+                />
+                h
+              </label>
               <button
                 type="button"
                 className="btn-icon"
