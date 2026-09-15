@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { useAppStore } from '../../store/AppStore'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
@@ -20,6 +20,25 @@ function durationFrom(start, end) {
 }
 
 const clockOf = (d) => format(d, 'HH:mm')
+
+export const BLOCK_CHOICES = [15, 25, 30, 45, 60]
+
+const hhmmss = (ms) => new Date(Math.max(0, ms)).toISOString().slice(11, 19)
+
+/**
+ * Time a session has actually earned. Once a block runs out the clock stops
+ * there and waits — so forgetting to stop costs you one block at most, however
+ * long you are away.
+ */
+export function timerElapsedMs(timer, now) {
+  if (!timer) return 0
+  const blockMs = timer.blockMinutes * 60_000
+  const inBlock = timer.blockStartedAt == null ? 0 : Math.min(now - timer.blockStartedAt, blockMs)
+  return (timer.bankedMs ?? 0) + Math.max(0, inBlock)
+}
+
+export const blockIsUp = (timer, now) =>
+  timer?.blockStartedAt != null && now - timer.blockStartedAt >= timer.blockMinutes * 60_000
 
 export default function StudyLog() {
   const { sessions, addSession, updateSession, removeSession, tasks, revisions, settings, stats } = useAppStore()
@@ -46,25 +65,76 @@ export default function StudyLog() {
   )
   const openRevisions = useMemo(() => revisions.filter((r) => !r.completed), [revisions])
 
+  const [blockMinutes, setBlockMinutes] = useLocalStorage('jt.blockMinutes', 30)
+
   useEffect(() => {
     if (!timer) return
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [timer])
 
-  const elapsed = timer ? (now - timer.startedAt) / 3_600_000 : 0
-  const elapsedLabel = timer
-    ? new Date(Math.max(0, now - timer.startedAt)).toISOString().slice(11, 19)
-    : '— not running —'
+  const elapsedMs = timerElapsedMs(timer, now)
+  const elapsedLabel = timer ? hhmmss(elapsedMs) : '— not running —'
+  const asking = blockIsUp(timer, now)
+  const blockLeftMs =
+    timer?.blockStartedAt == null ? 0 : timer.blockMinutes * 60_000 - (now - timer.blockStartedAt)
+
+  // One notification per finished block, and the tab title says it too in case
+  // notifications are blocked.
+  const notifiedFor = useRef(null)
+  useEffect(() => {
+    if (!asking) {
+      document.title = 'Journey Tracker'
+      return
+    }
+    const stamp = timer.blockStartedAt
+    if (notifiedFor.current === stamp) return
+    notifiedFor.current = stamp
+    document.title = `⏰ ${timer.blockMinutes}m done — still studying?`
+    try {
+      if (window.Notification?.permission === 'granted') {
+        new Notification(`${timer.blockMinutes} minutes done`, {
+          body: timer.task ? `Still on "${timer.task}"?` : 'Keep going, or stop and log it?',
+          tag: 'jt-block',
+        })
+      }
+    } catch {
+      // notifications unavailable — the in-page prompt still shows
+    }
+  }, [asking, timer])
+
+  useEffect(() => () => { document.title = 'Journey Tracker' }, [])
+
+  const startTimer = () => {
+    try {
+      if (window.Notification?.permission === 'default') Notification.requestPermission()
+    } catch {
+      // not supported; the in-page prompt is enough
+    }
+    setTimer({
+      startedAt: Date.now(),
+      blockStartedAt: Date.now(),
+      blockMinutes,
+      bankedMs: 0,
+      ...pending,
+    })
+  }
+
+  const continueTimer = () =>
+    setTimer({
+      ...timer,
+      bankedMs: (timer.bankedMs ?? 0) + timer.blockMinutes * 60_000,
+      blockStartedAt: Date.now(),
+    })
 
   const stopTimer = () => {
     const startedAt = new Date(timer.startedAt)
-    const endedAt = new Date()
+    const total = timerElapsedMs(timer, Date.now())
     addSession({
       date: format(startedAt, 'yyyy-MM-dd'),
       start: clockOf(startedAt),
-      end: clockOf(endedAt),
-      duration: Math.max(0.01, Math.round(elapsed * 100) / 100),
+      end: clockOf(new Date(startedAt.getTime() + total)),
+      duration: Math.max(0.01, Math.round((total / 3_600_000) * 100) / 100),
       category: timer.category ?? '',
       task: timer.task ?? '',
       focus: timer.focus ?? 4,
@@ -99,24 +169,45 @@ export default function StudyLog() {
       </datalist>
       <StudyCategoryDatalist />
 
-      <Card title="⏱️ Study timer" subtitle="Start it when you sit down. Stopping writes the session straight into the log.">
+      <Card
+        title="⏱️ Study timer"
+        subtitle={`Runs in ${blockMinutes}-minute blocks. When one ends the clock pauses and asks if you're still going, so forgetting to stop costs one block at most.`}
+      >
         <div className="timer">
           <div className="timer-clock">{elapsedLabel}</div>
           {timer ? (
-            <button className="btn btn-danger" onClick={stopTimer}>⏹ Stop session</button>
+            <button className="btn btn-danger" onClick={stopTimer}>⏹ Stop &amp; log</button>
           ) : (
-            <button
-              className="btn btn-primary"
-              onClick={() => setTimer({ startedAt: Date.now(), ...pending })}
-            >
-              ▶ Start session
-            </button>
+            <button className="btn btn-primary" onClick={startTimer}>▶ Start session</button>
           )}
+          <label className="check-line check-line-sm">
+            Block
+            <select
+              className="input input-num"
+              value={timer ? timer.blockMinutes : blockMinutes}
+              disabled={Boolean(timer)}
+              onChange={(e) => setBlockMinutes(Number(e.target.value))}
+            >
+              {BLOCK_CHOICES.map((n) => <option key={n} value={n}>{n}m</option>)}
+            </select>
+          </label>
           <div className="timer-meta">
+            {timer && !asking && (
+              <span>Block ends in <strong>{hhmmss(blockLeftMs)}</strong></span>
+            )}
             <span>Remaining today: <strong>{hrs(stats.today.remaining)}</strong></span>
             <span>Minimum win: <strong>{hrs(settings.minWin)}</strong></span>
           </div>
         </div>
+
+        {timer && !asking && (
+          <div className="bar-track" style={{ height: 6 }}>
+            <div
+              className="bar-fill bar-accent"
+              style={{ width: `${100 - (blockLeftMs / (timer.blockMinutes * 60_000)) * 100}%` }}
+            />
+          </div>
+        )}
 
         <div className="timer-fields">
           <input
@@ -145,6 +236,27 @@ export default function StudyLog() {
             ? 'Still editable while running — whatever is here when you stop is what gets logged.'
             : 'Set these before you start and the session logs itself with them attached.'}
         </p>
+
+        {asking && (
+          <div className="modal-backdrop">
+            <div className="modal" role="dialog" aria-modal="true" aria-label="Block finished">
+              <h3 className="modal-title">{timer.blockMinutes} minutes done</h3>
+              <p className="note">
+                {timer.task ? <>Still on <strong>{timer.task}</strong>?</> : 'Still studying?'}
+                {' '}The clock is paused at <strong>{hhmmss(elapsedMs)}</strong> and will not count
+                the time you spent away.
+              </p>
+              <div className="modal-actions">
+                <button className="btn" type="button" onClick={stopTimer}>
+                  ⏹ Stop &amp; log {hhmmss(elapsedMs)}
+                </button>
+                <button className="btn btn-primary" type="button" onClick={continueTimer}>
+                  ▶ Another {timer.blockMinutes} minutes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card
