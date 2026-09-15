@@ -37,6 +37,14 @@ export default function StudyLog() {
     else setPending((p) => ({ ...p, [k]: v }))
   }
 
+  // Only things still open are worth suggesting — a finished task or a closed
+  // revision is not what you are about to sit down and do.
+  const openTasks = useMemo(
+    () => tasks.filter((t) => t.status !== 'Completed' && t.status !== 'Cancelled'),
+    [tasks]
+  )
+  const openRevisions = useMemo(() => revisions.filter((r) => !r.completed), [revisions])
+
   // Categories already in use, so the timer can offer them without a fixed list.
   const categories = useMemo(() => {
     const set = new Set()
@@ -93,8 +101,8 @@ export default function StudyLog() {
   return (
     <>
       <datalist id="task-titles">
-        {tasks.map((t) => <option key={t.id} value={t.title} label="task" />)}
-        {revisions.map((r) => <option key={r.id} value={r.topic} label="revision" />)}
+        {openTasks.map((t) => <option key={t.id} value={t.title} label="task" />)}
+        {openRevisions.map((r) => <option key={r.id} value={r.topic} label="revision" />)}
       </datalist>
       <datalist id="study-categories">
         {categories.map((c) => <option key={c} value={c} />)}

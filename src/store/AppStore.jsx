@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS } from '../engine/config'
 import { buildDays, key } from '../engine/days'
 import { buildWeeks } from '../engine/weeks'
 import { buildMonths, decorateGoals } from '../engine/months'
-import { decorateRevisions } from '../engine/revision'
+import { decorateRevisions, migrateRevision } from '../engine/revision'
 import { buildStats } from '../engine/stats'
 import { DEFAULT_TIME_CONFIG } from '../utils/timeBlocks'
 import { migrateTask } from '../utils/taskDates'
@@ -81,7 +81,7 @@ export function AppStoreProvider({ children }) {
             weekInputs: d.weekInputs ?? {},
             monthInputs: d.monthInputs ?? {},
             goals: d.goals ?? [],
-            revisions: d.revisions ?? [],
+            revisions: (d.revisions ?? []).map(migrateRevision),
           })
         } catch (err) {
           console.error('Firestore load error', err)
@@ -212,24 +212,35 @@ export function AppStoreProvider({ children }) {
     []
   )
 
-  // Ticking a revision advances that topic's next pending review; unticking rolls
-  // the most recent one back.
+  // Records that a revision happened on this day. What to do with the topic's
+  // schedule is a separate, explicit decision.
   const setRevisionDone = useCallback(
     (dayKey, revId, done) =>
       setData((p) => {
         const revisionDoneIds = (p.dayInputs[dayKey]?.revisionDoneIds ?? []).filter((x) => x !== revId)
         if (done) revisionDoneIds.push(revId)
-        return {
-          ...mergeDay(p, dayKey, { revisionDoneIds }),
-          revisions: p.revisions.map((r) => {
-            if (r.id !== revId) return r
-            const flags = [r.r1Done === true, r.r2Done === true, r.r3Done === true]
-            const i = done ? flags.indexOf(false) : flags.lastIndexOf(true)
-            if (i === -1) return r
-            return { ...r, [`r${i + 1}Done`]: done }
-          }),
-        }
+        return mergeDay(p, dayKey, { revisionDoneIds })
       }),
+    []
+  )
+
+  /** Schedules the next pass, or closes the topic off for good. */
+  const resolveRevision = useCallback(
+    (revId, { nextReview, completed, on }) =>
+      setData((p) => ({
+        ...p,
+        revisions: p.revisions.map((r) =>
+          r.id !== revId
+            ? r
+            : {
+                ...r,
+                nextReview: completed ? '' : nextReview,
+                completed: Boolean(completed),
+                reviewCount: (Number(r.reviewCount) || 0) + 1,
+                lastReviewed: on,
+              }
+        ),
+      })),
     []
   )
 
@@ -328,7 +339,7 @@ export function AppStoreProvider({ children }) {
 
       setDayInput: mapOps('dayInputs').set,
       pickTask, unpickTask, setTaskDone,
-      pickRevision, unpickRevision, setRevisionDone,
+      pickRevision, unpickRevision, setRevisionDone, resolveRevision,
       setWeekInput: mapOps('weekInputs').set,
       setMonthInput: mapOps('monthInputs').set,
 
@@ -351,11 +362,11 @@ export function AppStoreProvider({ children }) {
           weekInputs: incoming.weekInputs ?? {},
           monthInputs: incoming.monthInputs ?? {},
           goals: incoming.goals ?? [],
-          revisions: incoming.revisions ?? [],
+          revisions: (incoming.revisions ?? []).map(migrateRevision),
         })
       },
     }
-  }, [user, authLoading, today, data, derived, patch, listOps, mapOps, pickTask, unpickTask, setTaskDone, pickRevision, unpickRevision, setRevisionDone])
+  }, [user, authLoading, today, data, derived, patch, listOps, mapOps, pickTask, unpickTask, setTaskDone, pickRevision, unpickRevision, setRevisionDone, resolveRevision])
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>
 }

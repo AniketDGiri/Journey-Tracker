@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { useAppStore } from '../../store/AppStore'
 import { Card, Empty, GrowText, hrs, pct } from '../common/ui'
+import RevisionDoneDialog from '../Revision/RevisionDoneDialog'
 
 const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 }
 const CLOSED = new Set(['Completed', 'Cancelled'])
@@ -295,7 +296,8 @@ function DayPanel({ day }) {
 const DUE_RANK = { '🔴 Overdue': 0, '🟡 Due today': 1, '🟢 Scheduled': 2 }
 
 function RevisionSection({ day }) {
-  const { revisions, pickRevision, unpickRevision, setRevisionDone } = useAppStore()
+  const { revisions, pickRevision, unpickRevision, setRevisionDone, resolveRevision, stats } = useAppStore()
+  const [doneFor, setDoneFor] = useState(null)
   const [q, setQ] = useState('')
   // Show every open topic by default. Hiding anything not yet due made a topic
   // you had just added invisible until its first review came round.
@@ -305,7 +307,7 @@ function RevisionSection({ day }) {
     const needle = q.trim().toLowerCase()
     const pickedIds = new Set(day.pickedRevisions.map((r) => r.id))
     return revisions
-      .filter((r) => !pickedIds.has(r.id) && r.status !== '✅ cycle complete')
+      .filter((r) => !pickedIds.has(r.id) && !r.completed)
       .filter((r) => !onlyDue || (r.nextReview && r.nextReview <= day.key))
       .filter((r) => !needle || `${r.topic} ${r.category ?? ''}`.toLowerCase().includes(needle))
       .sort(
@@ -332,8 +334,11 @@ function RevisionSection({ day }) {
               <input
                 type="checkbox"
                 checked={done}
-                onChange={(e) => setRevisionDone(day.key, r.id, e.target.checked)}
-                title="Mark this review done"
+                onChange={(e) => {
+                  setRevisionDone(day.key, r.id, e.target.checked)
+                  if (e.target.checked) setDoneFor(r.id)
+                }}
+                title="Mark this revision done"
               />
               <span className="day-task-title">{r.topic}</span>
               <span className="day-task-meta">
@@ -341,6 +346,14 @@ function RevisionSection({ day }) {
                   .filter(Boolean)
                   .join(' · ')}
               </span>
+              <button
+                type="button"
+                className="btn-icon"
+                title="Set the next revision date, or mark complete"
+                onClick={() => setDoneFor(r.id)}
+              >
+                🗓
+              </button>
               <button
                 type="button"
                 className="btn-icon"
@@ -393,6 +406,16 @@ function RevisionSection({ day }) {
           </ul>
         )}
       </div>
+
+      <RevisionDoneDialog
+        revision={revisions.find((r) => r.id === doneFor) ?? null}
+        today={stats.today.key}
+        onCancel={() => setDoneFor(null)}
+        onResolve={(result) => {
+          resolveRevision(doneFor, result)
+          setDoneFor(null)
+        }}
+      />
     </>
   )
 }
