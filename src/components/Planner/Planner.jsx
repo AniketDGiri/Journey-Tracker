@@ -5,6 +5,7 @@ import { Card, Empty, GrowText, hrs, pct } from '../common/ui'
 import RevisionDoneDialog from '../Revision/RevisionDoneDialog'
 
 const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 }
+const round1 = (n) => Math.round(n * 10) / 10
 const CLOSED = new Set(['Completed', 'Cancelled'])
 
 export default function Planner() {
@@ -136,7 +137,7 @@ export default function Planner() {
 }
 
 function DayPanel({ day }) {
-  const { tasks, pickTask, unpickTask, setTaskDone, setDayInput, setAllocation } = useAppStore()
+  const { tasks, pickTask, unpickTask, setTaskDone, setDayInput, setAllocation, finishTask, reopenTask } = useAppStore()
   const [tab, setTab] = useState('tasks')
   const [q, setQ] = useState('')
   // Backfilling a past day means picking tasks that are already finished.
@@ -212,15 +213,16 @@ function DayPanel({ day }) {
                 type="checkbox"
                 checked={done}
                 onChange={(e) => setTaskDone(day.key, t.id, e.target.checked)}
-                title="Finished this task"
+                title="I did my share of this today"
               />
               <span className="day-task-title">{t.title}</span>
               <span className="day-task-meta">
                 {[
                   t.category,
                   t.priority,
-                  t.estHours ? `${t.logged}h of ${t.estHours}h done` : null,
+                  t.estHours ? `${t.logged}h of ${t.estHours}h${t.logged < t.estHours ? ` · ${round1(t.estHours - t.logged)}h left` : ''}` : null,
                   t.pickedOnDays > 1 ? `over ${t.pickedOnDays} days` : null,
+                  t.status === 'Completed' ? '🏁 finished' : null,
                 ].filter(Boolean).join(' · ')}
               </span>
               <label className="alloc" title="Hours of this task you plan to do today">
@@ -232,6 +234,25 @@ function DayPanel({ day }) {
                 />
                 h
               </label>
+              {t.status === 'Completed' ? (
+                <button
+                  type="button"
+                  className="btn-icon"
+                  title="Task is finished — reopen it"
+                  onClick={() => reopenTask(t.id)}
+                >
+                  🏁
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-icon btn-finish"
+                  title="The whole task is finished, not just today's share"
+                  onClick={() => finishTask(t.id, day.key)}
+                >
+                  Finish
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-icon"

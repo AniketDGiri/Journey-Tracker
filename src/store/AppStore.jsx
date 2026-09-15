@@ -172,8 +172,11 @@ export function AppStoreProvider({ children }) {
     []
   )
 
-  // Ticking a task off finishes it in the Task Bank too — leave it unticked and
-  // pick it again tomorrow if it rolls over.
+  /**
+   * "I did my bit of this today" — a day-level record only. A three-hour task
+   * worked on for one hour today is done for today but not finished, so this
+   * never marks the task complete; finishTask does that.
+   */
   const setTaskDone = useCallback(
     (dayKey, taskId, done) =>
       setData((p) => {
@@ -182,12 +185,35 @@ export function AppStoreProvider({ children }) {
         return {
           ...mergeDay(p, dayKey, { doneIds }),
           tasks: p.tasks.map((t) =>
-            t.id !== taskId
+            t.id !== taskId || !done || t.status === 'Completed'
               ? t
-              : { ...t, status: done ? 'Completed' : 'In Progress', completedDate: done ? dayKey : '' }
+              : { ...t, status: t.status === 'Not Started' ? 'In Progress' : t.status }
           ),
         }
       }),
+    []
+  )
+
+  /** The whole task is finished, not just today's share of it. */
+  const finishTask = useCallback(
+    (taskId, on) =>
+      setData((p) => ({
+        ...p,
+        tasks: p.tasks.map((t) =>
+          t.id !== taskId ? t : { ...t, status: 'Completed', completedDate: on }
+        ),
+      })),
+    []
+  )
+
+  const reopenTask = useCallback(
+    (taskId) =>
+      setData((p) => ({
+        ...p,
+        tasks: p.tasks.map((t) =>
+          t.id !== taskId ? t : { ...t, status: 'In Progress', completedDate: '' }
+        ),
+      })),
     []
   )
 
@@ -379,7 +405,7 @@ export function AppStoreProvider({ children }) {
       addRevision: revisions.add, updateRevision: revisions.update, removeRevision: revisions.remove,
 
       setDayInput: mapOps('dayInputs').set,
-      pickTask, unpickTask, setTaskDone, setAllocation,
+      pickTask, unpickTask, setTaskDone, setAllocation, finishTask, reopenTask,
       addSubtask, toggleSubtask, updateSubtask, removeSubtask,
       pickRevision, unpickRevision, setRevisionDone, resolveRevision,
       setWeekInput: mapOps('weekInputs').set,
@@ -408,7 +434,7 @@ export function AppStoreProvider({ children }) {
         })
       },
     }
-  }, [user, authLoading, today, data, derived, patch, listOps, mapOps, pickTask, unpickTask, setTaskDone, setAllocation, addSubtask, toggleSubtask, updateSubtask, removeSubtask, pickRevision, unpickRevision, setRevisionDone, resolveRevision])
+  }, [user, authLoading, today, data, derived, patch, listOps, mapOps, pickTask, unpickTask, setTaskDone, setAllocation, finishTask, reopenTask, addSubtask, toggleSubtask, updateSubtask, removeSubtask, pickRevision, unpickRevision, setRevisionDone, resolveRevision])
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>
 }
