@@ -120,7 +120,11 @@ export default function TaskBank() {
                 <Fragment key={t.id}>
                 <tr className={t.status === 'Completed' ? 'row-done' : ''}>
                   <td className="td-text">
-                    <GrowText value={t.title} onChange={(e) => updateTask(t.id, { title: e.target.value })} />
+                    <TaskName
+                      task={t}
+                      logged={actualByTitle.get(t.title) ?? 0}
+                      onChange={(e) => updateTask(t.id, { title: e.target.value })}
+                    />
                   </td>
                   <td>
                     <input className="cell-input cell-narrow" list={STUDY_CATEGORY_LIST} value={t.category ?? ''} onChange={(e) => updateTask(t.id, { category: e.target.value })} />
@@ -283,6 +287,28 @@ function Subtasks({ task, add, toggle, rename, remove }) {
         />
         <button className="btn btn-primary" type="submit">Add step</button>
       </form>
+    </div>
+  )
+}
+
+const OPEN_WITH_PROGRESS = (task, logged) =>
+  logged > 0 && Number(task.estHours) > 0 && task.status !== 'Completed' && task.status !== 'Cancelled'
+
+/** The name doubles as its own progress bar: hours logged against the estimate. */
+function TaskName({ task, logged, onChange }) {
+  if (!OPEN_WITH_PROGRESS(task, logged)) {
+    return <GrowText value={task.title} onChange={onChange} />
+  }
+  const est = Number(task.estHours)
+  const ratio = logged / est
+  const over = ratio > 1
+  return (
+    <div
+      className={`task-fill ${over ? 'task-fill-over' : ''}`}
+      style={{ '--fill': `${Math.min(100, ratio * 100)}%` }}
+      title={`${logged}h of ${est}h — ${Math.round(ratio * 100)}%${over ? ' (over estimate)' : ''}`}
+    >
+      <GrowText value={task.title} onChange={onChange} />
     </div>
   )
 }
