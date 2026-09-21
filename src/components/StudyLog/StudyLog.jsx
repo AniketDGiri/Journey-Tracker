@@ -67,6 +67,20 @@ export default function StudyLog() {
 
   const [blockMinutes, setBlockMinutes] = useLocalStorage('jt.blockMinutes', 30)
 
+  // Surfaced so a denied/ignored/unsupported permission is visible instead of
+  // a silently-swallowed notification that never appears.
+  const [notifPermission, setNotifPermission] = useState(
+    () => window.Notification?.permission ?? 'unsupported'
+  )
+  const [notifError, setNotifError] = useState(null)
+
+  const requestNotifyPermission = () => {
+    if (!window.Notification) return
+    Notification.requestPermission()
+      .then((p) => setNotifPermission(p))
+      .catch(() => setNotifPermission(window.Notification.permission))
+  }
+
   useEffect(() => {
     if (!timer) return
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -91,26 +105,24 @@ export default function StudyLog() {
     if (notifiedFor.current === stamp) return
     notifiedFor.current = stamp
     document.title = `⏰ ${timer.blockMinutes}m done — still studying?`
-    try {
-      if (window.Notification?.permission === 'granted') {
+    if (notifPermission === 'granted') {
+      try {
         new Notification(`${timer.blockMinutes} minutes done`, {
           body: timer.task ? `Still on "${timer.task}"?` : 'Keep going, or stop and log it?',
           tag: 'jt-block',
         })
+      } catch (err) {
+        // The dialog and tab-title fallback still show — this just explains why
+        // the OS notification itself did not appear.
+        setNotifError(err.message)
       }
-    } catch {
-      // notifications unavailable — the in-page prompt still shows
     }
-  }, [asking, timer])
+  }, [asking, timer, notifPermission])
 
   useEffect(() => () => { document.title = 'Journey Tracker' }, [])
 
   const startTimer = () => {
-    try {
-      if (window.Notification?.permission === 'default') Notification.requestPermission()
-    } catch {
-      // not supported; the in-page prompt is enough
-    }
+    if (notifPermission === 'default') requestNotifyPermission()
     setTimer({
       startedAt: Date.now(),
       blockStartedAt: Date.now(),
@@ -208,6 +220,8 @@ export default function StudyLog() {
             />
           </div>
         )}
+
+        <NotifStatus permission={notifPermission} error={notifError} onEnable={requestNotifyPermission} />
 
         <div className="timer-fields">
           <input
@@ -328,5 +342,45 @@ export default function StudyLog() {
         </p>
       </Card>
     </>
+  )
+}
+
+/**
+ * Tells you plainly whether the browser will actually show a block-finished
+ * alert, instead of the old behaviour of trying once, silently, and never
+ * saying whether it worked.
+ */
+function NotifStatus({ permission, error, onEnable }) {
+  if (permission === 'granted') {
+    return (
+      <p className="note note-quiet">
+        🔔 Browser notifications are on — you'll get one when a block ends.
+        {error && ` (The last attempt failed to show: ${error})`}
+      </p>
+    )
+  }
+  if (permission === 'denied') {
+    return (
+      <p className="note note-warn">
+        🔕 Notifications are blocked for this site, so no popup will appear when a block ends —
+        only the in-page prompt and the tab title will. Click the icon next to the address bar
+        (the padlock or site-info icon), allow notifications, then reload this page.
+      </p>
+    )
+  }
+  if (permission === 'unsupported') {
+    return (
+      <p className="note note-quiet">
+        This browser doesn't support notifications — the in-page prompt and tab title still work
+        when a block ends.
+      </p>
+    )
+  }
+  return (
+    <p className="note note-quiet">
+      <button className="btn btn-sm" type="button" onClick={onEnable}>🔔 Enable browser notifications</button>
+      {' '}so a block ending pops up even if this tab isn't in front. Without it you'll only see
+      the in-page prompt and the tab title.
+    </p>
   )
 }
