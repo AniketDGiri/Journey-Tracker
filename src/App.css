@@ -850,9 +850,16 @@ textarea.input { resize: vertical; line-height: 1.5; }
   flex: 0 0 20px;
   border-radius: 5px;
   background: var(--heat-0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
 }
 
-.hm-fire { background: linear-gradient(135deg, #f97316, #ef4444); }
+/* Excellent shows the 🔥 itself on a deep green — a win, and then some — so it
+   can't be read as the yellow partial or the red miss beside it. */
+.hm-fire { background: #15803d; }
 .hm-good { background: #22c55e; }
 .hm-part { background: #facc15; }
 .hm-miss { background: #ef4444; opacity: 0.55; }

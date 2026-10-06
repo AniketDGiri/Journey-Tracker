@@ -20,6 +20,24 @@ function sumBy(list, fn) {
 }
 
 /**
+ * The heatmap colour for one day.
+ *  🔥 a win where the hours logged met or beat what you planned for the day
+ *     (or the daily target, if nothing was planned)
+ *  🟩 a win — the same rule as the streak: minimum hours, or Main Task ticked
+ *  🟨 some study logged, but not a win
+ *  🟥 a required day with nothing at all
+ *  ▫  a weekend with nothing — rest is never held against you
+ */
+export function dayStatus({ future, required, win, actual, planned, target }) {
+  if (future) return '⬜'
+  const bar = planned > 0 ? planned : target
+  if (win && actual > 0 && actual >= bar) return '🔥'
+  if (win) return '🟩'
+  if (actual > 0) return '🟨'
+  return required ? '🟥' : '▫'
+}
+
+/**
  * Rebuilds the "📅 Daily Planner" sheet: one derived row per calendar day.
  * The streak, miss-run and phoenix columns are recurrences, so this must stay
  * a single ordered pass.
@@ -204,17 +222,10 @@ export function buildDays({ settings, sessions, tasks, revisions = [], dayInputs
             : required
               ? '⭕ Missed'
               : '· Rest',
-      status: future
-        ? '⬜'
-        : !required
-          ? actual > 0 ? '🟩' : '▫'
-          : actual === 0
-            ? '🟥'
-            : completion >= 1
-              ? '🔥'
-              : completion >= settings.prodThreshold
-                ? '🟩'
-                : '🟨',
+      status: dayStatus({ future, required, win, actual, planned, target: settings.weekdayTarget }),
+      // What a 🔥 day had to reach: the hours you planned, or the daily target
+      // when nothing was planned.
+      excellentAt: planned > 0 ? planned : settings.weekdayTarget,
     })
 
     if (streak !== null) prevStreak = streak

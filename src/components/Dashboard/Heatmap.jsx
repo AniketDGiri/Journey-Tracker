@@ -5,13 +5,21 @@ import { weekStartOf } from '../../engine/weeks'
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 const LEGEND = [
-  ['🔥', 'excellent'],
-  ['🟩', 'productive'],
-  ['🟨', 'partial'],
+  ['🔥', 'excellent — won, and met or beat your planned hours'],
+  ['🟩', 'win — minimum hours, or Main Task ticked'],
+  ['🟨', 'partial — some study, not a win'],
   ['🟥', 'missed'],
   ['⬜', 'future'],
-  ['▫', 'weekend — optional, never counted against you'],
+  ['▫', 'weekend rest — never counted against you'],
 ]
+
+const WHY = {
+  '🔥': 'excellent',
+  '🟩': 'win',
+  '🟨': 'partial — not a win yet',
+  '🟥': 'missed',
+  '▫': 'rest day',
+}
 
 const CLASS = { '🔥': 'hm-fire', '🟩': 'hm-good', '🟨': 'hm-part', '🟥': 'hm-miss', '⬜': 'hm-future', '▫': 'hm-rest' }
 
@@ -48,10 +56,14 @@ export default function Heatmap({ days, today }) {
                   className={`hm-cell ${CLASS[status] ?? 'hm-none'} ${k === today ? 'hm-today' : ''}`}
                   title={
                     d
-                      ? `${format(d.date, 'EEE dd MMM')} — ${d.future ? 'upcoming' : `${d.actual.toFixed(2)}h`}`
+                      ? d.future
+                        ? `${format(d.date, 'EEE dd MMM')} — upcoming`
+                        : `${format(d.date, 'EEE dd MMM')} — ${d.actual.toFixed(2)}h of ${d.excellentAt}h planned · ${WHY[status] ?? ''}`
                       : ''
                   }
-                />
+                >
+                  {status === '🔥' ? '🔥' : null}
+                </div>
               )
             })}
           </div>
