@@ -5,7 +5,6 @@ import PersonalList from './PersonalList'
 import PersonalBoard from './PersonalBoard'
 import Projects from './Projects'
 import PersonalDates from './PersonalDates'
-import TimeTracker from './TimeTracker'
 import PersonalDashboard from './PersonalDashboard'
 import { PRIORITY, EFFORT, CategorySelect } from './TaskTable'
 
@@ -14,7 +13,6 @@ const VIEWS = [
   { id: 'board', label: 'Board' },
   { id: 'dates', label: '🗓️ Dates' },
   { id: 'projects', label: '📁 Projects' },
-  { id: 'time', label: '⏳ Time' },
   { id: 'dashboard', label: '📊 Dashboard' },
 ]
 
@@ -103,7 +101,6 @@ export default function Personal() {
       {view === 'board' && <PersonalBoard {...listProps} />}
       {view === 'dates' && <PersonalDates />}
       {view === 'projects' && <Projects />}
-      {view === 'time' && <TimeTracker />}
       {view === 'dashboard' && <PersonalDashboard />}
     </Card>
   )

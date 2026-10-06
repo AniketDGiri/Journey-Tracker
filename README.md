@@ -64,7 +64,7 @@ start and end times becomes a timed one. Nothing to configure and no API access 
 
 ## Time tracker
 
-**🏠 Personal → ⏳ Time** is a day-by-day time log: one row per slot from your start hour to
+**⏳ Time** (its own workspace in the header, beside System Design and Personal) is a day-by-day time log: one row per slot from your start hour to
 your end hour (4:00 AM to 11:00 PM in 30-minute slots by default, all adjustable). Write what
 you did in each slot and mark it Urgent and/or Important.
 

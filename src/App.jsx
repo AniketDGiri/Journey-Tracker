@@ -12,6 +12,8 @@ import Progress from './components/Progress/Progress'
 import Achievements from './components/Achievements/Achievements'
 import Settings from './components/Settings/Settings'
 import Personal from './components/Personal/Personal'
+import TimeTracker from './components/Personal/TimeTracker'
+import { Card } from './components/common/ui'
 import ExportImport from './components/common/ExportImport'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import './App.css'
@@ -32,7 +34,26 @@ const TABS = [
 const WORKSPACES = [
   { id: 'study', label: '🎯 System Design' },
   { id: 'personal', label: '🏠 Personal' },
+  { id: 'time', label: '⏳ Time' },
 ]
+
+const FOOTERS = {
+  study: 'Consistency beats intensity. A single huge day is capped; a chain of ordinary days is not.',
+  personal: 'Life outside the study plan still needs a list.',
+  time: 'Where the hours actually went — not where you meant them to go.',
+}
+
+function TimeWorkspace() {
+  return (
+    <Card
+      title="⏳ Time"
+      subtitle="Log what you did in each slot of the day and mark it urgent and/or important. The day is scored as an Eisenhower matrix as you go."
+      className="card-wide"
+    >
+      <TimeTracker />
+    </Card>
+  )
+}
 
 // The header's height changes with the breakpoint (tabs wrap onto their own
 // row), so publish it as a variable that sticky card headers can sit below.
@@ -116,13 +137,13 @@ function AppInner() {
         </div>
       </header>
 
-      <main className="app-main">{isStudy ? <Active /> : <Personal />}</main>
+      <main className="app-main">
+        {workspace === 'study' && <Active />}
+        {workspace === 'personal' && <Personal />}
+        {workspace === 'time' && <TimeWorkspace />}
+      </main>
 
-      <footer className="app-footer">
-        {isStudy
-          ? 'Consistency beats intensity. A single huge day is capped; a chain of ordinary days is not.'
-          : 'Life outside the study plan still needs a list.'}
-      </footer>
+      <footer className="app-footer">{FOOTERS[workspace]}</footer>
     </div>
   )
 }
