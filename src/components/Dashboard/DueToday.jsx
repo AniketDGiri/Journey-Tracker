@@ -67,22 +67,29 @@ export default function DueToday() {
 
   return (
     <Card title="📌 Due today" subtitle={subtitle}>
+      <DueList label="Today" items={dueToday} today={today} defaultOpen>
+        Nothing in the Task Bank or Revision Tracker is due today.
+      </DueList>
       {overdue.length > 0 && <DueList label="Overdue" items={overdue} today={today} over />}
-      {dueToday.length > 0 ? (
-        <DueList label="Today" items={dueToday} today={today} />
-      ) : (
-        <p className="note note-quiet">
-          Nothing in the Task Bank or Revision Tracker is due today.
-        </p>
-      )}
     </Card>
   )
 }
 
-function DueList({ label, items, today, over = false }) {
+/**
+ * A collapsible group. Today starts open; Overdue starts folded so a long
+ * backlog doesn't push the rest of the dashboard down, but its count stays in
+ * the header in red so it can't be missed.
+ */
+function DueList({ label, items, today, over = false, defaultOpen = false, children }) {
   return (
-    <div className="due-group">
-      <span className={`due-label ${over ? 'due-label-over' : ''}`}>{label}</span>
+    <details className="due-group" open={defaultOpen}>
+      <summary className={`due-label ${over ? 'due-label-over' : ''}`}>
+        {label}
+        <span className="sec-count">{items.length}</span>
+      </summary>
+      {items.length === 0 ? (
+        <p className="note note-quiet">{children}</p>
+      ) : (
       <ul className="due-list">
         {items.map((x) => (
           <li className={`due-item ${over ? 'due-item-over' : ''}`} key={`${x.kind}-${x.id}`}>
@@ -96,6 +103,7 @@ function DueList({ label, items, today, over = false }) {
           </li>
         ))}
       </ul>
-    </div>
+      )}
+    </details>
   )
 }

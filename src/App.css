@@ -470,6 +470,10 @@
   align-items: start;
 }
 
+/* On the study dashboard, cards in a row share a height: the shorter ones grow
+   to match the tallest, so nothing is ever cut off to make them line up. */
+.dash > .dash-grid { align-items: stretch; }
+
 .card-wide {
   grid-column: 1 / -1;
 }
@@ -2165,3 +2169,27 @@ html, body { max-width: 100%; }
 .due-kind { font-size: 13px; }
 .due-title { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
 .due-meta { grid-column: 2; font-size: 11.5px; color: var(--text-muted); }
+
+/* Due card groups are collapsible. */
+.due-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  padding: 2px 0 4px;
+}
+
+.due-group > summary::-webkit-details-marker { display: none; }
+
+.due-group > summary::before {
+  content: '▸';
+  color: var(--text-faint);
+  transition: transform var(--t);
+}
+
+.due-group[open] > summary::before { transform: rotate(90deg); }
+
+/* Scrolls rather than stretching the whole row — every item stays reachable. */
+.due-list { max-height: 260px; overflow-y: auto; padding-right: 2px; }
