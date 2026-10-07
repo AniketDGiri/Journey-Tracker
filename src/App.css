@@ -2064,3 +2064,39 @@ html, body { max-width: 100%; }
 
 .task-fill .cell-text { background: transparent; }
 .task-fill .cell-text:hover { border-color: var(--accent); }
+
+/* ===== Task Bank status sections ===== */
+.tb-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px 8px;
+}
+
+.tb-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.tb-group-head::-webkit-details-marker { display: none; }
+
+.tb-group-head::before {
+  content: '▸';
+  color: var(--text-faint);
+  transition: transform var(--t);
+}
+
+.tb-group[open] > .tb-group-head::before { transform: rotate(90deg); }
+
+.tb-group-hours {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}

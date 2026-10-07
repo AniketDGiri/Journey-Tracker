@@ -10,6 +10,7 @@ const GROUPS = [
       ['reqDays', 'Required days per week', 'number', '5 = Monday–Friday are required. Sat/Sun stay optional.'],
       ['weekendRequired', 'Weekend required hours', 'number', 'Stays 0. Weekend study is bonus, never a duty.'],
       ['minWin', 'Minimum daily win (hours)', 'number', "The 'I showed up' bar. Hit this and the day counts."],
+      ['taskHoursPerDay', 'Task Bank hours per day', 'number', 'Estimates a task from its due date: this many hours for each day from when it was added until it is due.'],
       ['prodThreshold', 'Productive threshold', 'number', "Share of the daily target that makes a day 'productive'."],
     ],
   },

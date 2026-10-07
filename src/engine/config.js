@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = {
   maxTokens: 2,
   targetDate: '2027-03-01',
   startDate: '2026-08-31',
+  taskHoursPerDay: 2,
 }
 
 export const LEVELS = [

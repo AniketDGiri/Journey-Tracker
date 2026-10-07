@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
+import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { useAppStore } from '../../store/AppStore'
 import { Card, Empty, GrowText, hrs } from '../common/ui'
 import { STUDY_CATEGORY_LIST, StudyCategoryDatalist } from '../common/categories'
@@ -7,19 +8,45 @@ const PRIORITY = ['High', 'Medium', 'Low']
 const STATUS = ['Not Started', 'Planned', 'In Progress', 'Completed', 'Deferred', 'Cancelled']
 const DIFFICULTY = ['Easy', 'Medium', 'Hard']
 
+// Each status gets its own collapsible section. Work you're on comes first;
+// finished and cancelled work is folded away until you want it.
+const GROUPS = [
+  { status: 'In Progress', icon: '🔵', open: true, always: true },
+  { status: 'Not Started', icon: '⚪', open: true, always: true },
+  { status: 'Planned', icon: '🗓️', open: true },
+  { status: 'Deferred', icon: '⏸️', open: true },
+  { status: 'Completed', icon: '✅', open: false, always: true },
+  { status: 'Cancelled', icon: '🚫', open: false },
+]
+
 const BLANK = {
   title: '', category: '', subcategory: '', priority: 'Medium', estHours: 1,
   dueDate: '', status: 'Not Started', difficulty: 'Medium',
   importance: 'Medium', completedDate: '', notes: '',
 }
 
+/**
+ * Hours per day for every day from `fromKey` to the due date, both included —
+ * a task added on the 7th and due on the 9th has three days, so 6h at 2h/day.
+ * A due date that has already passed still counts as one day.
+ */
+export function estimateFor(fromKey, dueKey, perDay) {
+  if (!dueKey) return null
+  const days = Math.max(1, differenceInCalendarDays(parseISO(dueKey), parseISO(fromKey)) + 1)
+  return Math.round(days * perDay * 100) / 100
+}
+
+const byDue = (a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999')
+const byCompleted = (a, b) => (b.completedDate || '').localeCompare(a.completedDate || '')
+
 export default function TaskBank() {
   const {
-    tasks, sessions, days, addTask, updateTask, removeTask, addSession, stats,
+    tasks, sessions, days, addTask, updateTask, removeTask, addSession, stats, settings,
     addSubtask, toggleSubtask, updateSubtask, removeSubtask,
   } = useAppStore()
+  const today = stats.today.key
+  const perDay = Number(settings.taskHoursPerDay) || 2
   const [draft, setDraft] = useState(BLANK)
-  const [filter, setFilter] = useState('All')
   const [log, setLog] = useState(null)
   const [openSubs, setOpenSubs] = useState(null)
 
@@ -45,16 +72,47 @@ export default function TaskBank() {
     return m
   }, [days])
 
-  const shown = filter === 'All' ? tasks : tasks.filter((t) => t.status === filter)
+  const grouped = useMemo(() => {
+    const m = new Map(GROUPS.map((g) => [g.status, []]))
+    for (const t of tasks) {
+      const s = m.has(t.status) ? t.status : 'Not Started'
+      m.get(s).push(t)
+    }
+    for (const [s, list] of m) list.sort(s === 'Completed' ? byCompleted : byDue)
+    return m
+  }, [tasks])
 
   const submit = (e) => {
     e.preventDefault()
     if (!draft.title.trim()) return
-    addTask({ ...draft, title: draft.title.trim(), estHours: Number(draft.estHours) || 0 })
+    addTask({
+      ...draft,
+      title: draft.title.trim(),
+      estHours: Number(draft.estHours) || 0,
+      createdOn: today,
+    })
     setDraft(BLANK)
   }
 
   const set = (k) => (e) => setDraft((p) => ({ ...p, [k]: e.target.value }))
+
+  // Picking a due date fills the estimate in; it stays editable afterwards.
+  const setDraftDue = (e) => {
+    const dueDate = e.target.value
+    setDraft((p) => ({ ...p, dueDate, estHours: estimateFor(today, dueDate, perDay) ?? p.estHours }))
+  }
+
+  const changeDue = (t, dueDate) =>
+    updateTask(t.id, {
+      dueDate,
+      ...(dueDate ? { estHours: estimateFor(t.createdOn || today, dueDate, perDay) } : {}),
+    })
+
+  const changeStatus = (t, status) =>
+    updateTask(t.id, {
+      status,
+      completedDate: status === 'Completed' ? t.completedDate || today : '',
+    })
 
   // Manual hours go through the Study Log so they count toward the day, streak and XP.
   const submitLog = (e) => {
@@ -70,53 +128,7 @@ export default function TaskBank() {
     setLog(null)
   }
 
-  return (
-    <Card
-      title="✅ Task Bank"
-      subtitle="Every task you might do lives here, undated. Pick what you'll actually work on each day over in the Daily Planner. Actual hours add up from the Study Log — click one to log hours by hand."
-      actions={
-        <select className="input" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          {['All', ...STATUS].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-      }
-      className="card-wide"
-    >
-      <StudyCategoryDatalist />
-      <form className="add-form" onSubmit={submit}>
-        <input className="input input-grow" placeholder="Task…" value={draft.title} onChange={set('title')} />
-        <input className="input" list={STUDY_CATEGORY_LIST} placeholder="Category" value={draft.category} onChange={set('category')} />
-        <select className="input" value={draft.priority} onChange={set('priority')}>
-          {PRIORITY.map((p) => <option key={p}>{p}</option>)}
-        </select>
-        <input className="input input-num" type="number" min="0" step="0.25" value={draft.estHours} onChange={set('estHours')} title="Estimated hours" />
-        <input className="input" type="date" value={draft.dueDate} onChange={set('dueDate')} title="Due date (optional)" />
-        <button className="btn btn-primary" type="submit">Add</button>
-      </form>
-
-      {shown.length === 0 ? (
-        <Empty>No tasks yet — it starts empty on purpose. Add the first one above.</Empty>
-      ) : (
-        <div className="table-scroll">
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th className="th-text">Task</th>
-                <th>Category</th>
-                <th>Priority</th>
-                <th>Est.</th>
-                <th>Actual ＋</th>
-                <th>Steps</th>
-                <th>Scheduled</th>
-                <th>Due</th>
-                <th>Status</th>
-                <th>Difficulty</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((t) => (
+  const renderRow = (t) => (
                 <Fragment key={t.id}>
                 <tr className={t.status === 'Completed' ? 'row-done' : ''}>
                   <td className="td-text">
@@ -135,7 +147,13 @@ export default function TaskBank() {
                     </select>
                   </td>
                   <td>
-                    <input className="cell-input cell-num" type="number" min="0" step="0.25" value={t.estHours ?? 0} onChange={(e) => updateTask(t.id, { estHours: Number(e.target.value) || 0 })} />
+                    <input
+                      className="cell-input cell-num"
+                      type="number" min="0" step="0.25"
+                      value={t.estHours ?? 0}
+                      title={`Set automatically from the due date at ${perDay}h a day — edit it to override`}
+                      onChange={(e) => updateTask(t.id, { estHours: Number(e.target.value) || 0 })}
+                    />
                   </td>
                   <td>
                     <button
@@ -167,10 +185,10 @@ export default function TaskBank() {
                     <Scheduled dates={scheduledById.get(t.id)} />
                   </td>
                   <td>
-                    <input className="cell-input" type="date" value={t.dueDate ?? ''} onChange={(e) => updateTask(t.id, { dueDate: e.target.value })} />
+                    <input className="cell-input" type="date" value={t.dueDate ?? ''} onChange={(e) => changeDue(t, e.target.value)} />
                   </td>
                   <td>
-                    <select className="cell-input" value={t.status ?? 'Not Started'} onChange={(e) => updateTask(t.id, { status: e.target.value })}>
+                    <select className="cell-input" value={t.status ?? 'Not Started'} onChange={(e) => changeStatus(t, e.target.value)}>
                       {STATUS.map((s) => <option key={s}>{s}</option>)}
                     </select>
                   </td>
@@ -221,10 +239,74 @@ export default function TaskBank() {
                   </tr>
                 )}
                 </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
+  )
+
+  return (
+    <Card
+      title="✅ Task Bank"
+      subtitle={`Every task you might do lives here. Pick what you'll work on each day in the Daily Planner. Give a task a due date and its estimate fills in at ${perDay}h a day.`}
+      className="card-wide"
+    >
+      <StudyCategoryDatalist />
+      <form className="add-form" onSubmit={submit}>
+        <input className="input input-grow" placeholder="Task…" value={draft.title} onChange={set('title')} />
+        <input className="input" list={STUDY_CATEGORY_LIST} placeholder="Category" value={draft.category} onChange={set('category')} />
+        <select className="input" value={draft.priority} onChange={set('priority')}>
+          {PRIORITY.map((p) => <option key={p}>{p}</option>)}
+        </select>
+        <input className="input" type="date" value={draft.dueDate} onChange={setDraftDue} title="Due date — sets the estimate" />
+        <input
+          className="input input-num"
+          type="number" min="0" step="0.25"
+          value={draft.estHours}
+          onChange={set('estHours')}
+          title={`Estimated hours — filled in from the due date at ${perDay}h a day`}
+        />
+        <button className="btn btn-primary" type="submit">Add</button>
+      </form>
+
+      {tasks.length === 0 ? (
+        <Empty>No tasks yet — it starts empty on purpose. Add the first one above.</Empty>
+      ) : (
+        GROUPS.filter((g) => g.always || grouped.get(g.status).length > 0).map((g) => {
+          const list = grouped.get(g.status)
+          const hours = list.reduce((a, t) => a + (Number(t.estHours) || 0), 0)
+          return (
+            <details className="tb-group" key={g.status} open={g.open}>
+              <summary className="tb-group-head">
+                <span>{g.icon} {g.status}</span>
+                <span className="sec-count">{list.length}</span>
+                {list.length > 0 && g.status !== 'Completed' && (
+                  <span className="tb-group-hours">{hrs(hours)} estimated</span>
+                )}
+              </summary>
+              {list.length === 0 ? (
+                <p className="sec-empty">Nothing {g.status.toLowerCase()} right now.</p>
+              ) : (
+                <div className="table-scroll">
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th className="th-text">Task</th>
+                        <th>Category</th>
+                        <th>Priority</th>
+                        <th>Est.</th>
+                        <th>Actual ＋</th>
+                        <th>Steps</th>
+                        <th>Scheduled</th>
+                        <th>Due</th>
+                        <th>Status</th>
+                        <th>Difficulty</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>{list.map(renderRow)}</tbody>
+                  </table>
+                </div>
+              )}
+            </details>
+          )
+        })
       )}
     </Card>
   )
