@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
-import { differenceInCalendarDays, parseISO } from 'date-fns'
+import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns'
 import { useAppStore } from '../../store/AppStore'
 import { Card, Empty, GrowText, hrs } from '../common/ui'
 import { STUDY_CATEGORY_LIST, StudyCategoryDatalist } from '../common/categories'
@@ -30,7 +30,7 @@ const BLANK = {
  * a task added on the 7th and due on the 9th has three days, so 6h at 2h/day.
  * A due date that has already passed still counts as one day.
  */
-export function estimateFor(fromKey, dueKey, perDay) {
+function estimateFor(fromKey, dueKey, perDay) {
   if (!dueKey) return null
   const days = Math.max(1, differenceInCalendarDays(parseISO(dueKey), parseISO(fromKey)) + 1)
   return Math.round(days * perDay * 100) / 100
@@ -192,10 +192,11 @@ export default function TaskBank() {
                       {STATUS.map((s) => <option key={s}>{s}</option>)}
                     </select>
                   </td>
-                  <td>
-                    <select className="cell-input" value={t.difficulty ?? 'Medium'} onChange={(e) => updateTask(t.id, { difficulty: e.target.value })}>
-                      {DIFFICULTY.map((d) => <option key={d}>{d}</option>)}
-                    </select>
+                  <td className="cell-center">
+                    <DifficultyDot
+                      value={t.difficulty}
+                      onChange={(difficulty) => updateTask(t.id, { difficulty })}
+                    />
                   </td>
                   <td>
                     <button className="btn-icon" onClick={() => removeTask(t.id)} title="Delete task">✕</button>
@@ -206,9 +207,11 @@ export default function TaskBank() {
                     <td colSpan={11}>
                       <Subtasks
                         task={t}
+                        today={today}
+                        perDay={perDay}
                         add={addSubtask}
                         toggle={toggleSubtask}
-                        rename={updateSubtask}
+                        update={updateSubtask}
                         remove={removeSubtask}
                       />
                     </td>
@@ -296,7 +299,7 @@ export default function TaskBank() {
                         <th>Scheduled</th>
                         <th>Due</th>
                         <th>Status</th>
-                        <th>Difficulty</th>
+                        <th title="Difficulty — click a dot to change it">Diff.</th>
                         <th />
                       </tr>
                     </thead>
@@ -312,6 +315,21 @@ export default function TaskBank() {
   )
 }
 
+/** Difficulty as a single dot: 🟢 Easy → 🟡 Medium → 🔴 Hard, click to cycle. */
+function DifficultyDot({ value, onChange }) {
+  const current = DIFFICULTY.includes(value) ? value : 'Medium'
+  const next = DIFFICULTY[(DIFFICULTY.indexOf(current) + 1) % DIFFICULTY.length]
+  return (
+    <button
+      type="button"
+      className={`diff-dot diff-${current.toLowerCase()}`}
+      onClick={() => onChange(next)}
+      title={`${current} — click for ${next}`}
+      aria-label={`Difficulty: ${current}. Click to change to ${next}.`}
+    />
+  )
+}
+
 function Scheduled({ dates }) {
   if (!dates || dates.length === 0) return <span className="muted">backlog</span>
   const last = dates[dates.length - 1]
@@ -323,49 +341,141 @@ function Scheduled({ dates }) {
   )
 }
 
-function Subtasks({ task, add, toggle, rename, remove }) {
-  const [title, setTitle] = useState('')
+/**
+ * The last day a step needs, at `perDay` hours a day from its start — the same
+ * rule as a task's estimate, run the other way. 4h at 2h/day from the 7th ends
+ * on the 8th.
+ */
+function stepEndFor(start, hours, perDay) {
+  if (!start || !(hours > 0)) return ''
+  const days = Math.max(1, Math.ceil(hours / perDay))
+  return format(addDays(parseISO(start), days - 1), 'yyyy-MM-dd')
+}
+
+const STEP_BLANK = { title: '', hours: '', start: '', end: '' }
+
+function Subtasks({ task, today, perDay, add, toggle, update, remove }) {
+  const [draft, setDraft] = useState({ ...STEP_BLANK, start: today })
+  // Until you pick an end date yourself, it follows the hours and start.
+  const [endTouched, setEndTouched] = useState(false)
   const list = task.subtasks ?? []
   const done = list.filter((x) => x.done).length
+  const stepHours = list.reduce((a, x) => a + (Number(x.hours) || 0), 0)
+  const est = Number(task.estHours) || 0
+
+  const setField = (k) => (e) => {
+    const value = e.target.value
+    setDraft((p) => {
+      const next = { ...p, [k]: value }
+      if (k !== 'end' && !endTouched) next.end = stepEndFor(next.start, Number(next.hours), perDay)
+      return next
+    })
+    if (k === 'end') setEndTouched(true)
+  }
 
   return (
     <div className="subs">
       <div className="subs-head">
         <strong>Steps for “{task.title}”</strong>
         {list.length > 0 && <span className="sec-count">{done} of {list.length} done</span>}
-      </div>
-      <ul className="subs-list">
-        {list.length === 0 && (
-          <li className="day-task-empty">
-            No steps yet. These are a checklist only — they don't affect your hours or scores.
-          </li>
+        {stepHours > 0 && (
+          <span className={`subs-hours ${est && stepHours > est ? 'subs-hours-over' : ''}`}>
+            {hrs(stepHours)} in steps{est ? ` of ${hrs(est)} estimated` : ''}
+            {est && stepHours > est ? ' — more than the estimate' : ''}
+          </span>
         )}
-        {list.map((x) => (
-          <li className={`sub-row ${x.done ? 'sub-done' : ''}`} key={x.id}>
-            <input type="checkbox" checked={x.done} onChange={() => toggle(task.id, x.id)} />
-            <input
-              className="cell-input"
-              value={x.title}
-              onChange={(e) => rename(task.id, x.id, e.target.value)}
-            />
-            <button className="btn-icon" onClick={() => remove(task.id, x.id)} title="Delete step">✕</button>
-          </li>
-        ))}
-      </ul>
+      </div>
+
+      {list.length === 0 ? (
+        <p className="day-task-empty">
+          No steps yet. Steps are a checklist with their own hours and dates — they don't change
+          your logged hours or scores.
+        </p>
+      ) : (
+        <div className="table-scroll">
+          <table className="tbl subs-tbl">
+            <thead>
+              <tr>
+                <th />
+                <th className="th-text">Step</th>
+                <th>Hours</th>
+                <th>Start</th>
+                <th>End</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((x) => (
+                <tr className={x.done ? 'row-done' : ''} key={x.id}>
+                  <td className="cell-center">
+                    <input type="checkbox" checked={x.done} onChange={() => toggle(task.id, x.id)} />
+                  </td>
+                  <td className="td-text">
+                    <GrowText value={x.title} onChange={(e) => update(task.id, x.id, { title: e.target.value })} />
+                  </td>
+                  <td>
+                    <input
+                      className="cell-input cell-num"
+                      type="number" min="0" step="0.25"
+                      value={x.hours ?? ''}
+                      onChange={(e) => update(task.id, x.id, { hours: Number(e.target.value) || 0 })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="cell-input"
+                      type="date"
+                      value={x.start ?? ''}
+                      onChange={(e) => update(task.id, x.id, { start: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="cell-input"
+                      type="date"
+                      value={x.end ?? ''}
+                      min={x.start || undefined}
+                      onChange={(e) => update(task.id, x.id, { end: e.target.value })}
+                    />
+                  </td>
+                  <td>
+                    <button className="btn-icon" onClick={() => remove(task.id, x.id)} title="Delete step">✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <form
         className="add-form"
         onSubmit={(e) => {
           e.preventDefault()
-          if (!title.trim()) return
-          add(task.id, title.trim())
-          setTitle('')
+          if (!draft.title.trim()) return
+          add(task.id, { ...draft, title: draft.title.trim(), hours: Number(draft.hours) || 0 })
+          // Carry on from where this step ends, so a chain of steps lines up.
+          setDraft({ ...STEP_BLANK, start: draft.end || draft.start || today })
+          setEndTouched(false)
         }}
       >
+        <input className="input input-grow" placeholder="Add a step…" value={draft.title} onChange={setField('title')} />
         <input
-          className="input input-grow"
-          placeholder="Add a step…"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          className="input input-num"
+          type="number" min="0" step="0.25"
+          placeholder="hours"
+          value={draft.hours}
+          onChange={setField('hours')}
+          title="How many hours this step will take"
+        />
+        <input className="input" type="date" value={draft.start} onChange={setField('start')} title="Start date" />
+        <input
+          className="input"
+          type="date"
+          value={draft.end}
+          min={draft.start || undefined}
+          onChange={setField('end')}
+          title={`End date — worked out from the hours at ${perDay}h a day until you set it`}
         />
         <button className="btn btn-primary" type="submit">Add step</button>
       </form>

@@ -2006,7 +2006,7 @@ html, body { max-width: 100%; }
 .alloc .cell-num { width: 58px; min-width: 58px; text-align: right; }
 
 /* ===== Task steps ===== */
-.subs { display: flex; flex-direction: column; gap: 10px; max-width: 620px; }
+.subs { display: flex; flex-direction: column; gap: 10px; max-width: 860px; }
 
 .subs-head {
   display: flex;
@@ -2016,19 +2016,11 @@ html, body { max-width: 100%; }
   font-size: 13.5px;
 }
 
-.subs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.subs-hours { font-size: 12px; color: var(--text-muted); }
+.subs-hours-over { color: #b45309; font-weight: 600; }
 
-.sub-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 4px 8px;
-}
-
-.sub-done .cell-input { text-decoration: line-through; color: var(--text-faint); }
+.subs-tbl { background: var(--surface); border-radius: var(--radius-sm); }
+.subs-tbl .th-text { min-width: 200px; }
 
 .btn-finish {
   font-size: 11px;
@@ -2099,4 +2091,26 @@ html, body { max-width: 100%; }
   font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
+}
+
+/* ===== Difficulty dot ===== */
+.diff-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+  padding: 0;
+  cursor: pointer;
+  transition: transform var(--t);
+  vertical-align: middle;
+}
+
+.diff-dot:hover { transform: scale(1.25); }
+.diff-easy { background: #22c55e; }
+.diff-medium { background: #facc15; }
+.diff-hard { background: #ef4444; }
+
+@media (pointer: coarse) {
+  .diff-dot { width: 22px; height: 22px; }
 }

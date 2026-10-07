@@ -237,8 +237,13 @@ export function AppStoreProvider({ children }) {
       tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, subtasks: fn(t.subtasks ?? []) } : t)),
     }))
 
+  /** A step: title plus optional hours and a start/end date. */
   const addSubtask = useCallback(
-    (taskId, title) => patchSubtasks(taskId, (list) => [...list, { id: uid(), title, done: false }]),
+    (taskId, fields) =>
+      patchSubtasks(taskId, (list) => [
+        ...list,
+        { id: uid(), title: '', hours: 0, start: '', end: '', ...fields, done: false },
+      ]),
     []
   )
   const toggleSubtask = useCallback(
@@ -249,8 +254,8 @@ export function AppStoreProvider({ children }) {
     []
   )
   const updateSubtask = useCallback(
-    (taskId, subId, title) =>
-      patchSubtasks(taskId, (list) => list.map((x) => (x.id === subId ? { ...x, title } : x))),
+    (taskId, subId, fields) =>
+      patchSubtasks(taskId, (list) => list.map((x) => (x.id === subId ? { ...x, ...fields } : x))),
     []
   )
   const removeSubtask = useCallback(
