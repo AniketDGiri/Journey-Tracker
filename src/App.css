@@ -2130,3 +2130,38 @@ html, body { max-width: 100%; }
 @media (max-width: 640px) {
   .stopped-panel { flex-direction: column; align-items: stretch; }
 }
+
+/* ===== Dashboard: due today ===== */
+.due-group { display: flex; flex-direction: column; gap: 6px; }
+
+.due-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.due-label-over { color: #dc2626; }
+
+.due-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.due-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.due-item-over {
+  border-color: color-mix(in srgb, #dc2626 35%, var(--border));
+  background: color-mix(in srgb, #dc2626 6%, var(--surface));
+}
+
+.due-kind { font-size: 13px; }
+.due-title { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.due-meta { grid-column: 2; font-size: 11.5px; color: var(--text-muted); }

@@ -1,6 +1,7 @@
 import { useAppStore } from '../../store/AppStore'
 import { Bar, Card, Empty, Row, Stat, hrs, pct } from '../common/ui'
 import Heatmap from './Heatmap'
+import DueToday from './DueToday'
 
 export default function Dashboard() {
   const { stats, settings, days } = useAppStore()
@@ -30,6 +31,8 @@ export default function Dashboard() {
           <Row label="Productivity" value={`${pct(today.productivity)}  ${today.productivityLabel}`} />
           <p className="note">{messages.nextWin}</p>
         </Card>
+
+        <DueToday />
 
         <Card title="🎖️ Level" subtitle={`LEVEL ${level.level} — ${level.title}`}>
           <div className="xp-line">
