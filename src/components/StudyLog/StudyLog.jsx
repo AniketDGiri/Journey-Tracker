@@ -81,11 +81,13 @@ export default function StudyLog() {
       .catch(() => setNotifPermission(window.Notification.permission))
   }
 
+  const stopped = timer?.stopped === true
+
   useEffect(() => {
-    if (!timer) return
+    if (!timer || stopped) return
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
-  }, [timer])
+  }, [timer, stopped])
 
   const elapsedMs = timerElapsedMs(timer, now)
   const elapsedLabel = timer ? hhmmss(elapsedMs) : '— not running —'
@@ -139,22 +141,43 @@ export default function StudyLog() {
       blockStartedAt: Date.now(),
     })
 
-  const stopTimer = () => {
-    const startedAt = new Date(timer.startedAt)
+  // Stopping freezes the clock without logging anything, so you can check the
+  // details — or carry on — before it goes into the log. It lives on the timer
+  // object, so a stopped session survives a reload too.
+  const stopClock = () => {
     const total = timerElapsedMs(timer, Date.now())
+    setTimer({
+      ...timer,
+      stopped: true,
+      bankedMs: total,
+      blockStartedAt: null,
+      logHours: Math.max(0.01, Math.round((total / 3_600_000) * 100) / 100),
+    })
+  }
+
+  const resumeTimer = () =>
+    setTimer({ ...timer, stopped: false, logHours: undefined, blockStartedAt: Date.now() })
+
+  const clearTimer = () => {
+    setPending({ task: timer.task ?? '', category: timer.category ?? '', focus: timer.focus ?? 4 })
+    setTimer(null)
+  }
+
+  const logTimer = () => {
+    const startedAt = new Date(timer.startedAt)
+    const duration = Math.max(0.01, Number(timer.logHours) || timer.bankedMs / 3_600_000)
     addSession({
       date: format(startedAt, 'yyyy-MM-dd'),
       start: clockOf(startedAt),
-      end: clockOf(new Date(startedAt.getTime() + total)),
-      duration: Math.max(0.01, Math.round((total / 3_600_000) * 100) / 100),
+      end: clockOf(new Date(startedAt.getTime() + duration * 3_600_000)),
+      duration: Math.round(duration * 100) / 100,
       category: timer.category ?? '',
       task: timer.task ?? '',
       focus: timer.focus ?? 4,
       energy: 4,
       notes: '',
     })
-    setPending({ task: timer.task ?? '', category: timer.category ?? '', focus: timer.focus ?? 4 })
-    setTimer(null)
+    clearTimer()
   }
 
   const sorted = useMemo(
@@ -187,11 +210,9 @@ export default function StudyLog() {
       >
         <div className="timer">
           <div className="timer-clock">{elapsedLabel}</div>
-          {timer ? (
-            <button className="btn btn-danger" onClick={stopTimer}>⏹ Stop &amp; log</button>
-          ) : (
-            <button className="btn btn-primary" onClick={startTimer}>▶ Start session</button>
-          )}
+          {!timer && <button className="btn btn-primary" onClick={startTimer}>▶ Start session</button>}
+          {timer && !stopped && <button className="btn btn-danger" onClick={stopClock}>⏹ Stop</button>}
+          {stopped && <span className="pill">Stopped — not logged yet</span>}
           <label className="check-line check-line-sm">
             Block
             <select
@@ -204,7 +225,7 @@ export default function StudyLog() {
             </select>
           </label>
           <div className="timer-meta">
-            {timer && !asking && (
+            {timer && !stopped && !asking && (
               <span>Block ends in <strong>{hhmmss(blockLeftMs)}</strong></span>
             )}
             <span>Remaining today: <strong>{hrs(stats.today.remaining)}</strong></span>
@@ -212,12 +233,38 @@ export default function StudyLog() {
           </div>
         </div>
 
-        {timer && !asking && (
+        {timer && !stopped && !asking && (
           <div className="bar-track" style={{ height: 6 }}>
             <div
               className="bar-fill bar-accent"
               style={{ width: `${100 - (blockLeftMs / (timer.blockMinutes * 60_000)) * 100}%` }}
             />
+          </div>
+        )}
+
+        {stopped && (
+          <div className="stopped-panel">
+            <label className="check-line check-line-sm">
+              Log as
+              <input
+                className="input input-num"
+                type="number" min="0.01" step="0.25"
+                value={timer.logHours ?? ''}
+                onChange={(e) => setTimer({ ...timer, logHours: e.target.value })}
+                title="Hours to log — adjust if the clock ran while you were away"
+              />
+              hours
+            </label>
+            <button className="btn btn-primary" onClick={logTimer}>✓ Log session</button>
+            <button className="btn" onClick={resumeTimer}>▶ Resume</button>
+            <button
+              className="btn"
+              onClick={() => {
+                if (window.confirm('Discard this session without logging it?')) clearTimer()
+              }}
+            >
+              Discard
+            </button>
           </div>
         )}
 
@@ -246,9 +293,11 @@ export default function StudyLog() {
           </label>
         </div>
         <p className="note note-quiet">
-          {timer
-            ? 'Still editable while running — whatever is here when you stop is what gets logged.'
-            : 'Set these before you start and the session logs itself with them attached.'}
+          {stopped
+            ? 'Check the task, category and hours, then Log session. Nothing is saved until you do.'
+            : timer
+              ? 'Still editable while running — whatever is here when you log is what gets saved.'
+              : 'Set these before you start and the session logs itself with them attached.'}
         </p>
 
         {asking && (
@@ -261,8 +310,8 @@ export default function StudyLog() {
                 the time you spent away.
               </p>
               <div className="modal-actions">
-                <button className="btn" type="button" onClick={stopTimer}>
-                  ⏹ Stop &amp; log {hhmmss(elapsedMs)}
+                <button className="btn" type="button" onClick={stopClock}>
+                  ⏹ Stop at {hhmmss(elapsedMs)}
                 </button>
                 <button className="btn btn-primary" type="button" onClick={continueTimer}>
                   ▶ Another {timer.blockMinutes} minutes
