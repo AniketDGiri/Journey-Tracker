@@ -14,8 +14,8 @@ const toBool = (v) => (v === 'y' ? true : v === 'n' ? false : undefined)
 const fromBool = (v) => (v === true ? 'y' : v === false ? 'n' : '')
 
 export default function TimeTracker() {
-  const { timeLog, timeConfig, setTimeSlot, setTimeDay, updateTimeConfig, stats } = useAppStore()
-  const [date, setDate] = useState(stats.today.key)
+  const { timeLog, timeConfig, setTimeSlot, setTimeDay, updateTimeConfig, todayKey } = useAppStore()
+  const [date, setDate] = useState(todayKey)
 
   const slots = useMemo(() => slotList(timeConfig), [timeConfig])
   const day = timeLog[date]
@@ -30,7 +30,7 @@ export default function TimeTracker() {
           <button className="btn btn-sm" onClick={() => shift(-1)}>←</button>
           <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           <button className="btn btn-sm" onClick={() => shift(1)}>→</button>
-          <button className="btn btn-sm" onClick={() => setDate(stats.today.key)}>Today</button>
+          <button className="btn btn-sm" onClick={() => setDate(todayKey)}>Today</button>
           <span className="time-day-label">{format(parseISO(date), 'EEEE dd MMM yyyy')}</span>
         </div>
         <div className="time-cfg">

@@ -1,16 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { format } from 'date-fns'
 import { auth, db, googleProvider } from '../firebase'
 import { uid } from '../utils/id'
-import { DEFAULT_SETTINGS } from '../engine/config'
-import { buildDays, key } from '../engine/days'
-import { buildWeeks } from '../engine/weeks'
-import { buildMonths, decorateGoals } from '../engine/months'
-import { decorateRevisions, migrateRevision } from '../engine/revision'
-import { buildStats } from '../engine/stats'
 import { DEFAULT_TIME_CONFIG } from '../utils/timeBlocks'
 import { migrateTask } from '../utils/taskDates'
+
+/**
+ * Auth plus the Personal and Time workspaces. Study data lives in the Ascend
+ * store (src/study), in its own Firestore document.
+ */
 
 const AppStoreContext = createContext(null)
 
@@ -23,30 +23,53 @@ export const DEFAULT_SECTIONS = [
 ]
 
 const EMPTY = {
-  settings: DEFAULT_SETTINGS,
   personalTasks: [],
   personalSections: DEFAULT_SECTIONS,
   personalCategories: DEFAULT_CATEGORIES,
   projects: [],
   timeLog: {},
   timeConfig: DEFAULT_TIME_CONFIG,
-  tasks: [],
-  sessions: [],
-  dayInputs: {},
-  weekInputs: {},
-  monthInputs: {},
-  goals: [],
-  revisions: [],
+}
+
+// Only these fields are written. Anything else in the document (the retired
+// study tracker's data) is left exactly as it is rather than wiped.
+const FIELDS = Object.keys(EMPTY)
+
+const fromDoc = (d) => ({
+  personalTasks: (d.personalTasks ?? []).map(migrateTask),
+  personalSections: d.personalSections ?? DEFAULT_SECTIONS,
+  personalCategories: d.personalCategories ?? DEFAULT_CATEGORIES,
+  projects: d.projects ?? [],
+  timeLog: d.timeLog ?? {},
+  timeConfig: { ...DEFAULT_TIME_CONFIG, ...(d.timeConfig ?? {}) },
+})
+
+/**
+ * Days won in the retired study tracker, read-only. Its rule: a day was won by
+ * logging at least the minimum hours (1h unless changed) or ticking that day's
+ * Main Task.
+ */
+export function legacyWonDays(d, todayKey) {
+  const minWin = Number(d.settings?.minWin) || 1
+  const hours = new Map()
+  for (const s of d.sessions ?? []) {
+    if (s?.date) hours.set(s.date, (hours.get(s.date) ?? 0) + (Number(s.duration) || 0))
+  }
+  const won = new Set()
+  for (const [date, h] of hours) if (h >= minWin) won.add(date)
+  for (const [date, input] of Object.entries(d.dayInputs ?? {})) if (input?.mainTaskDone === true) won.add(date)
+  return [...won].filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k) && k <= todayKey).sort()
 }
 
 const userDocRef = (userId) => doc(db, 'users', userId, 'appData', 'main')
+const dayKey = (d) => format(d, 'yyyy-MM-dd')
 
-// Ticks over at midnight so the whole dashboard rolls onto the new day on its own.
+// Ticks over at midnight so every view rolls onto the new day on its own.
 function useToday() {
   const [today, setToday] = useState(() => new Date())
   useEffect(() => {
     const id = setInterval(() => {
-      setToday((prev) => (key(prev) === key(new Date()) ? prev : new Date()))
+      setToday((prev) => (dayKey(prev) === dayKey(new Date()) ? prev : new Date()))
     }, 60_000)
     return () => clearInterval(id)
   }, [])
@@ -58,6 +81,8 @@ export function AppStoreProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true)
   const [dataLoaded, setDataLoaded] = useState(false)
   const [data, setData] = useState(EMPTY)
+  // Not part of `data`, so it is never written back.
+  const [legacyDays, setLegacyDays] = useState([])
   const today = useToday()
 
   useEffect(() => {
@@ -67,28 +92,15 @@ export function AppStoreProvider({ children }) {
         try {
           const snap = await getDoc(userDocRef(u.uid))
           const d = snap.exists() ? snap.data() : {}
-          setData({
-            settings: { ...DEFAULT_SETTINGS, ...(d.settings ?? {}) },
-            personalTasks: (d.personalTasks ?? []).map(migrateTask),
-            personalSections: d.personalSections ?? DEFAULT_SECTIONS,
-            personalCategories: d.personalCategories ?? DEFAULT_CATEGORIES,
-            projects: d.projects ?? [],
-            timeLog: d.timeLog ?? {},
-            timeConfig: { ...DEFAULT_TIME_CONFIG, ...(d.timeConfig ?? {}) },
-            tasks: d.tasks ?? [],
-            sessions: d.sessions ?? [],
-            dayInputs: d.dayInputs ?? {},
-            weekInputs: d.weekInputs ?? {},
-            monthInputs: d.monthInputs ?? {},
-            goals: d.goals ?? [],
-            revisions: (d.revisions ?? []).map(migrateRevision),
-          })
+          setData(fromDoc(d))
+          setLegacyDays(legacyWonDays(d, dayKey(new Date())))
         } catch (err) {
           console.error('Firestore load error', err)
         }
         setDataLoaded(true)
       } else {
         setData(EMPTY)
+        setLegacyDays([])
         setDataLoaded(false)
       }
       setAuthLoading(false)
@@ -100,31 +112,13 @@ export function AppStoreProvider({ children }) {
     if (!dataLoaded || !user) return
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      setDoc(userDocRef(user.uid), data).catch((err) => console.error('Firestore save error', err))
+      setDoc(userDocRef(user.uid), data, { mergeFields: FIELDS }).catch((err) =>
+        console.error('Firestore save error', err)
+      )
     }, 600)
     return () => clearTimeout(debounceRef.current)
   }, [data, user, dataLoaded])
 
-  // ── derived model ─────────────────────────────────────────────────────────
-  const derived = useMemo(() => {
-    const { settings, tasks, sessions, dayInputs, weekInputs, monthInputs, goals, revisions } = data
-    const decoratedRevisions = decorateRevisions(revisions, today)
-    const days = buildDays({ settings, sessions, tasks, revisions: decoratedRevisions, dayInputs, today })
-    const weeks = buildWeeks({ settings, days, weekInputs, today })
-    const months = buildMonths({ settings, days, monthInputs, achievements: [], today })
-    const stats = buildStats({ settings, days, weeks, months, tasks, today })
-    // Achievement unlock dates feed the monthly "achievements unlocked" count.
-    const monthsWithAch = buildMonths({
-      settings, days, monthInputs, achievements: stats.achievements, today,
-    })
-    return {
-      days, weeks, months: monthsWithAch, stats,
-      goals: decorateGoals(goals),
-      revisions: decoratedRevisions,
-    }
-  }, [data, today])
-
-  // ── mutations ─────────────────────────────────────────────────────────────
   const patch = useCallback((fields) => setData((p) => ({ ...p, ...fields })), [])
 
   const listOps = useCallback(
@@ -137,206 +131,15 @@ export function AppStoreProvider({ children }) {
     []
   )
 
-  const mapOps = useCallback(
-    (name) => ({
-      set: (k, fields) =>
-        setData((p) => ({ ...p, [name]: { ...p[name], [k]: { ...(p[name][k] ?? {}), ...fields } } })),
-    }),
-    []
-  )
-
-  // ── day ↔ task assignment ─────────────────────────────────────────────────
-  const mergeDay = (p, dayKey, fields) => ({
-    ...p,
-    dayInputs: { ...p.dayInputs, [dayKey]: { ...(p.dayInputs[dayKey] ?? {}), ...fields } },
-  })
-
-  const pickTask = useCallback(
-    (dayKey, taskId) =>
-      setData((p) => {
-        const ids = p.dayInputs[dayKey]?.taskIds ?? []
-        return ids.includes(taskId) ? p : mergeDay(p, dayKey, { taskIds: [...ids, taskId] })
-      }),
-    []
-  )
-
-  const unpickTask = useCallback(
-    (dayKey, taskId) =>
-      setData((p) => {
-        const day = p.dayInputs[dayKey] ?? {}
-        return mergeDay(p, dayKey, {
-          taskIds: (day.taskIds ?? []).filter((x) => x !== taskId),
-          doneIds: (day.doneIds ?? []).filter((x) => x !== taskId),
-        })
-      }),
-    []
-  )
-
-  /**
-   * "I did my bit of this today" — a day-level record only. A three-hour task
-   * worked on for one hour today is done for today but not finished, so this
-   * never marks the task complete; finishTask does that.
-   */
-  const setTaskDone = useCallback(
-    (dayKey, taskId, done) =>
-      setData((p) => {
-        const doneIds = (p.dayInputs[dayKey]?.doneIds ?? []).filter((x) => x !== taskId)
-        if (done) doneIds.push(taskId)
-        return {
-          ...mergeDay(p, dayKey, { doneIds }),
-          tasks: p.tasks.map((t) =>
-            t.id !== taskId || !done || t.status === 'Completed'
-              ? t
-              : { ...t, status: t.status === 'Not Started' ? 'In Progress' : t.status }
-          ),
-        }
-      }),
-    []
-  )
-
-  /** The whole task is finished, not just today's share of it. */
-  const finishTask = useCallback(
-    (taskId, on) =>
-      setData((p) => ({
-        ...p,
-        tasks: p.tasks.map((t) =>
-          t.id !== taskId ? t : { ...t, status: 'Completed', completedDate: on }
-        ),
-      })),
-    []
-  )
-
-  const reopenTask = useCallback(
-    (taskId) =>
-      setData((p) => ({
-        ...p,
-        tasks: p.tasks.map((t) =>
-          t.id !== taskId ? t : { ...t, status: 'In Progress', completedDate: '' }
-        ),
-      })),
-    []
-  )
-
-  /** Hours of an item you intend to do on this day. Blank falls back to an even
-      share of its estimate across the days it is picked for. */
-  const setAllocation = useCallback(
-    (dayKey, itemId, hours) =>
-      setData((p) => {
-        const alloc = { ...(p.dayInputs[dayKey]?.alloc ?? {}) }
-        if (hours === '' || hours === null) delete alloc[itemId]
-        else alloc[itemId] = Number(hours) || 0
-        return mergeDay(p, dayKey, { alloc })
-      }),
-    []
-  )
-
-  // ── task subtasks ─────────────────────────────────────────────────────────
-  const patchSubtasks = (taskId, fn) =>
-    setData((p) => ({
-      ...p,
-      tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, subtasks: fn(t.subtasks ?? []) } : t)),
-    }))
-
-  /** A step: title plus optional hours and a start/end date. */
-  const addSubtask = useCallback(
-    (taskId, fields) =>
-      patchSubtasks(taskId, (list) => [
-        ...list,
-        { id: uid(), title: '', hours: 0, start: '', end: '', ...fields, done: false },
-      ]),
-    []
-  )
-  const toggleSubtask = useCallback(
-    (taskId, subId) =>
-      patchSubtasks(taskId, (list) =>
-        list.map((x) => (x.id === subId ? { ...x, done: !x.done } : x))
-      ),
-    []
-  )
-  const updateSubtask = useCallback(
-    (taskId, subId, fields) =>
-      patchSubtasks(taskId, (list) => list.map((x) => (x.id === subId ? { ...x, ...fields } : x))),
-    []
-  )
-  const removeSubtask = useCallback(
-    (taskId, subId) => patchSubtasks(taskId, (list) => list.filter((x) => x.id !== subId)),
-    []
-  )
-
-  const pickRevision = useCallback(
-    (dayKey, revId) =>
-      setData((p) => {
-        const ids = p.dayInputs[dayKey]?.revisionIds ?? []
-        return ids.includes(revId) ? p : mergeDay(p, dayKey, { revisionIds: [...ids, revId] })
-      }),
-    []
-  )
-
-  const unpickRevision = useCallback(
-    (dayKey, revId) =>
-      setData((p) => {
-        const day = p.dayInputs[dayKey] ?? {}
-        return mergeDay(p, dayKey, {
-          revisionIds: (day.revisionIds ?? []).filter((x) => x !== revId),
-          revisionDoneIds: (day.revisionDoneIds ?? []).filter((x) => x !== revId),
-        })
-      }),
-    []
-  )
-
-  // Records that a revision happened on this day. What to do with the topic's
-  // schedule is a separate, explicit decision.
-  const setRevisionDone = useCallback(
-    (dayKey, revId, done) =>
-      setData((p) => {
-        const revisionDoneIds = (p.dayInputs[dayKey]?.revisionDoneIds ?? []).filter((x) => x !== revId)
-        if (done) revisionDoneIds.push(revId)
-        return mergeDay(p, dayKey, { revisionDoneIds })
-      }),
-    []
-  )
-
-  /** Schedules the next pass, or closes the topic off for good. */
-  const resolveRevision = useCallback(
-    (revId, { nextReview, completed, on }) =>
-      setData((p) => ({
-        ...p,
-        revisions: p.revisions.map((r) =>
-          r.id !== revId
-            ? r
-            : {
-                ...r,
-                nextReview: completed ? '' : nextReview,
-                completed: Boolean(completed),
-                reviewCount: (Number(r.reviewCount) || 0) + 1,
-                lastReviewed: on,
-              }
-        ),
-      })),
-    []
-  )
-
   const value = useMemo(() => {
-    const tasks = listOps('tasks')
-    const sessions = listOps('sessions')
-    const goals = listOps('goals')
-    const revisions = listOps('revisions')
     const personal = listOps('personalTasks')
     const projects = listOps('projects')
     return {
       user, authLoading, today,
+      todayKey: dayKey(today),
+      legacyWonDays: legacyDays,
       signIn: () => signInWithPopup(auth, googleProvider),
       signOut: () => firebaseSignOut(auth),
-
-      settings: data.settings,
-      updateSettings: (fields) => patch({ settings: { ...data.settings, ...fields } }),
-      resetSettings: () => patch({ settings: DEFAULT_SETTINGS }),
-
-      tasks: data.tasks,
-      addTask: tasks.add, updateTask: tasks.update, removeTask: tasks.remove,
-
-      sessions: data.sessions,
-      addSession: sessions.add, updateSession: sessions.update, removeSession: sessions.remove,
 
       personalTasks: data.personalTasks,
       addPersonalTask: personal.add,
@@ -403,43 +206,14 @@ export function AppStoreProvider({ children }) {
         })),
       updateTimeConfig: (fields) => patch({ timeConfig: { ...data.timeConfig, ...fields } }),
 
-      rawGoals: data.goals,
-      addGoal: goals.add, updateGoal: goals.update, removeGoal: goals.remove,
-
-      rawRevisions: data.revisions,
-      addRevision: revisions.add, updateRevision: revisions.update, removeRevision: revisions.remove,
-
-      setDayInput: mapOps('dayInputs').set,
-      pickTask, unpickTask, setTaskDone, setAllocation, finishTask, reopenTask,
-      addSubtask, toggleSubtask, updateSubtask, removeSubtask,
-      pickRevision, unpickRevision, setRevisionDone, resolveRevision,
-      setWeekInput: mapOps('weekInputs').set,
-      setMonthInput: mapOps('monthInputs').set,
-
-      ...derived,
-
       exportData: () => ({ ...data, exportedAt: new Date().toISOString() }),
+      // Older backups also carry the retired study fields; only Personal/Time are read.
       importData: (incoming) => {
         if (!incoming) return
-        setData({
-          settings: { ...DEFAULT_SETTINGS, ...(incoming.settings ?? {}) },
-          personalTasks: (incoming.personalTasks ?? []).map(migrateTask),
-          personalSections: incoming.personalSections ?? DEFAULT_SECTIONS,
-          personalCategories: incoming.personalCategories ?? DEFAULT_CATEGORIES,
-          projects: incoming.projects ?? [],
-          timeLog: incoming.timeLog ?? {},
-          timeConfig: { ...DEFAULT_TIME_CONFIG, ...(incoming.timeConfig ?? {}) },
-          tasks: incoming.tasks ?? [],
-          sessions: incoming.sessions ?? [],
-          dayInputs: incoming.dayInputs ?? {},
-          weekInputs: incoming.weekInputs ?? {},
-          monthInputs: incoming.monthInputs ?? {},
-          goals: incoming.goals ?? [],
-          revisions: (incoming.revisions ?? []).map(migrateRevision),
-        })
+        setData(fromDoc(incoming))
       },
     }
-  }, [user, authLoading, today, data, derived, patch, listOps, mapOps, pickTask, unpickTask, setTaskDone, setAllocation, finishTask, reopenTask, addSubtask, toggleSubtask, updateSubtask, removeSubtask, pickRevision, unpickRevision, setRevisionDone, resolveRevision])
+  }, [user, authLoading, today, data, legacyDays, patch, listOps])
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>
 }

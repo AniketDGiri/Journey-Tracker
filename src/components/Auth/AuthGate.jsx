@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAppStore } from '../../store/AppStore'
+import Sigil from '../common/Sigil'
 
 function GoogleIcon() {
   return (
@@ -26,9 +27,10 @@ export default function AuthGate({ children }) {
 
   if (authLoading) {
     return (
-      <div className="auth-loading">
-        <div className="auth-spinner" />
-        <p>Loading…</p>
+      <div className="auth-loading" role="status" aria-label="Loading">
+        <div className="auth-pulse">
+          <Sigil size={36} />
+        </div>
       </div>
     )
   }
@@ -50,10 +52,13 @@ export default function AuthGate({ children }) {
     return (
       <div className="auth-screen">
         <div className="auth-card">
-          <div className="auth-logo">🧭</div>
-          <h1 className="auth-title">Journey Tracker</h1>
+          <div className="auth-logo">
+            <Sigil size={34} />
+          </div>
+          <p className="auth-brand">ASCEND</p>
+          <h1 className="auth-title">Become the engineer you’re preparing to be.</h1>
           <p className="auth-sub">
-            Sign in with Google to save your progress and sync across all your devices.
+            Consistency beats intensity. Sign in with Google to save your progress and sync it across your devices.
           </p>
           <button
             className="auth-google-btn"

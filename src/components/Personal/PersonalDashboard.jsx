@@ -12,13 +12,13 @@ const RANGES = [
 ]
 
 export default function PersonalDashboard() {
-  const { timeLog, timeConfig, personalTasks, personalSections, stats } = useAppStore()
+  const { timeLog, timeConfig, personalTasks, personalSections, todayKey } = useAppStore()
   const [range, setRange] = useState(7)
 
   const dateKeys = useMemo(() => {
-    const end = parseISO(stats.today.key)
+    const end = parseISO(todayKey)
     return Array.from({ length: range }, (_, i) => format(addDays(end, -i), 'yyyy-MM-dd'))
-  }, [range, stats.today.key])
+  }, [range, todayKey])
 
   const sum = useMemo(
     () => summariseRange(timeLog, timeConfig, dateKeys),
@@ -42,7 +42,7 @@ export default function PersonalDashboard() {
   const avgQ2 = (list) =>
     list.length ? list.reduce((a, d) => a + d.pct.q2, 0) / list.length : null
 
-  const overdue = personalTasks.filter((t) => isOverdue(t, stats.today.key)).length
+  const overdue = personalTasks.filter((t) => isOverdue(t, todayKey)).length
   const doneCount = personalTasks.filter((t) => t.section === 'done').length
 
   const byCategory = useMemo(() => {

@@ -11,9 +11,9 @@ import { PRIORITY, EFFORT, CategorySelect } from './TaskTable'
 const VIEWS = [
   { id: 'list', label: 'List' },
   { id: 'board', label: 'Board' },
-  { id: 'dates', label: '🗓️ Dates' },
-  { id: 'projects', label: '📁 Projects' },
-  { id: 'dashboard', label: '📊 Dashboard' },
+  { id: 'dates', label: 'Dates' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'dashboard', label: 'Dashboard' },
 ]
 
 const BLANK = {
@@ -25,7 +25,7 @@ export default function Personal() {
   const {
     personalTasks, personalSections, projects,
     addPersonalTask, updatePersonalTask, removePersonalTask,
-    addPersonalSection, stats,
+    addPersonalSection, todayKey,
   } = useAppStore()
 
   const [view, setView] = useState('list')
@@ -46,7 +46,7 @@ export default function Personal() {
     projects,
     update: updatePersonalTask,
     remove: removePersonalTask,
-    today: stats.today.key,
+    today: todayKey,
     addSection: addPersonalSection,
   }
 

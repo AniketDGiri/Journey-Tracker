@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { Download, Upload } from 'lucide-react'
 import { useAppStore } from '../../store/AppStore'
 
 export default function ExportImport() {
@@ -11,7 +12,7 @@ export default function ExportImport() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `journey-tracker-backup-${data.exportedAt.slice(0, 10)}.json`
+    a.download = `ascend-backup-${data.exportedAt.slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -34,8 +35,14 @@ export default function ExportImport() {
 
   return (
     <div className="export-import">
-      <button className="link-btn" onClick={handleExport}>Export backup</button>
-      <button className="link-btn" onClick={() => fileInput.current?.click()}>Import backup</button>
+      <button className="icon-btn icon-btn-label" onClick={handleExport} title="Export backup">
+        <Download size={15} aria-hidden="true" />
+        <span>Export</span>
+      </button>
+      <button className="icon-btn icon-btn-label" onClick={() => fileInput.current?.click()} title="Import backup">
+        <Upload size={15} aria-hidden="true" />
+        <span>Import</span>
+      </button>
       <input
         type="file"
         accept="application/json"

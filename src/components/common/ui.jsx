@@ -24,13 +24,18 @@ export function GrowText({ value, onChange, placeholder, title }) {
   )
 }
 
+// Ascend card titles are quiet labels; the emoji prefixes the titles were written
+// with are dropped here so every card reads the same way.
+const LEADING_EMOJI = /^[\p{Extended_Pictographic}️‍\s]+/u
+const cleanTitle = (t) => (typeof t === 'string' ? t.replace(LEADING_EMOJI, '') : t)
+
 export function Card({ title, subtitle, actions, children, className = '' }) {
   return (
     <section className={`card ${className}`}>
       {(title || actions) && (
         <header className="card-head">
           <div>
-            {title && <h2 className="card-title">{title}</h2>}
+            {title && <h2 className="card-title">{cleanTitle(title)}</h2>}
             {subtitle && <p className="card-sub">{subtitle}</p>}
           </div>
           {actions && <div className="card-actions">{actions}</div>}

@@ -14,7 +14,7 @@ export default function Projects() {
   const {
     projects, addProject, updateProject, removeProject,
     personalTasks, personalSections, addPersonalTask, updatePersonalTask, removePersonalTask,
-    stats,
+    todayKey,
   } = useAppStore()
 
   const [selected, setSelected] = useState(null)
@@ -153,7 +153,7 @@ export default function Projects() {
               projects={projects}
               update={updatePersonalTask}
               remove={removePersonalTask}
-              today={stats.today.key}
+              today={todayKey}
               emptyLabel="No tasks for this project yet."
             />
           </div>

@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Palette as RGB channels so Tailwind's /opacity modifiers work. Dark is the
+   native theme; the light set keeps the same hues on paper. */
+:root,
+.app {
+  --c-void: 8 8 12;
+  --c-surface: 16 16 23;
+  --c-surface-2: 22 22 31;
+  --c-surface-3: 29 29 40;
+  --c-line: 34 34 46;
+  --c-line-strong: 46 46 61;
+  --c-ink: 232 232 240;
+  --c-ink-soft: 180 180 196;
+  --c-ink-muted: 138 138 160;
+  --c-ink-faint: 92 92 112;
+  --c-violet: 139 92 246;
+  --c-violet-soft: 167 139 250;
+  --c-violet-deep: 91 63 196;
+  --c-arc: 59 130 246;
+  --c-arc-soft: 124 178 255;
+  --c-ember: 245 165 36;
+  --c-ember-soft: 251 201 107;
+  --c-rose: 240 98 122;
+  --c-jade: 52 211 153;
+}
+
+.app[data-theme='light'] {
+  --c-void: 246 246 250;
+  --c-surface: 255 255 255;
+  --c-surface-2: 243 242 248;
+  --c-surface-3: 233 231 242;
+  --c-line: 228 226 238;
+  --c-line-strong: 212 209 226;
+  --c-ink: 21 20 31;
+  --c-ink-soft: 61 59 82;
+  --c-ink-muted: 107 105 128;
+  --c-ink-faint: 154 152 174;
+  --c-violet: 124 58 237;
+  --c-violet-soft: 109 40 217;
+  --c-violet-deep: 91 63 196;
+  --c-arc: 37 99 235;
+  --c-arc-soft: 29 78 216;
+  --c-ember: 217 119 6;
+  --c-ember-soft: 180 83 9;
+  --c-rose: 225 29 72;
+  --c-jade: 5 150 105;
+}
+
+dialog::backdrop {
+  background: rgba(4, 4, 8, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+@layer components {
+  .st-panel {
+    @apply rounded-xl border border-line bg-surface/90;
+  }
+  .st-label {
+    @apply text-[11px] font-medium uppercase tracking-[0.12em] text-ink-muted;
+  }
+  .st-input {
+    @apply w-full rounded-lg border border-line-strong bg-surface-2 px-3 py-2 text-sm text-ink placeholder:text-ink-faint
+      focus:border-violet-soft focus:outline-none focus:ring-1 focus:ring-violet-soft/60;
+  }
+}
+
+/* In-app motion setting (the system preference is handled in index.css). */
+html.motion-off *,
+html.motion-off *::before,
+html.motion-off *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* Grid children may shrink below their content (wide tables/heatmaps scroll inside). */
+.grid > * {
+  min-width: 0;
+}

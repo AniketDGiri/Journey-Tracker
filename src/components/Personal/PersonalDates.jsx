@@ -24,10 +24,10 @@ function heading(dateKey, today) {
 export default function PersonalDates() {
   const {
     personalTasks, personalSections, projects,
-    updatePersonalTask, removePersonalTask, stats,
+    updatePersonalTask, removePersonalTask, todayKey,
   } = useAppStore()
   const [filter, setFilter] = useState('open')
-  const today = stats.today.key
+  const today = todayKey
 
   const groups = useMemo(() => {
     const shown =
