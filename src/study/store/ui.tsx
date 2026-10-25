@@ -3,8 +3,8 @@ import type { Domain } from '../domain/types';
 
 /** UI-only state: routing and which global sheet is open. Never persisted. */
 
-export type Route = 'dashboard' | 'dsa' | 'hld' | 'lld' | 'revision' | 'sessions' | 'quests' | 'analytics' | 'settings' | 'personal' | 'time';
-const ROUTES: Route[] = ['dashboard', 'dsa', 'hld', 'lld', 'revision', 'sessions', 'quests', 'analytics', 'settings', 'personal', 'time'];
+export type Route = 'dashboard' | 'dsa' | 'hld' | 'lld' | 'revision' | 'sessions' | 'quests' | 'analytics' | 'settings' | 'personal' | 'time' | 'workout' | 'nutrition';
+const ROUTES: Route[] = ['dashboard', 'dsa', 'hld', 'lld', 'revision', 'sessions', 'quests', 'analytics', 'settings', 'personal', 'time', 'workout', 'nutrition'];
 
 export type Sheet =
   /** `mode: 'new'` opens straight on a blank item form, pre-set to `topicId`. */
@@ -15,7 +15,8 @@ export type Sheet =
   | { type: 'focus'; domain?: Domain }
   | { type: 'boss'; bossId: string }
   | { type: 'topic'; domain: Domain; topicId?: string }
-  | { type: 'plan'; itemId: string; subItemId?: string; goalId?: string };
+  | { type: 'plan'; itemId: string; subItemId?: string; goalId?: string }
+  | { type: 'workout-log'; phaseId: string; workoutId: string };
 
 interface UI {
   route: Route;

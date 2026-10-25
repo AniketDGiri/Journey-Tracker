@@ -1,5 +1,6 @@
 import type { AppState, Goal, SubItem } from '../domain/types';
-import { DEFAULT_SETTINGS, SCHEMA_VERSION } from '../domain/defaults';
+import { DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } from '../domain/defaults';
+import { emptyNutrition } from '../domain/nutrition';
 import { isDayKey } from '../lib/date';
 
 /** Validation + migration for persisted and imported data. */
@@ -74,6 +75,22 @@ export function migrate(raw: unknown): AppState {
     activeSession: isObj(payload.activeSession) ? (payload.activeSession as unknown as AppState['activeSession']) : undefined,
     bossAttempts: (Array.isArray(payload.bossAttempts) ? payload.bossAttempts : []) as AppState['bossAttempts'],
     goals: cleanGoals(payload.goals),
+    // v3 → v4: training phases and nutrition tracking.
+    fitness: isObj(payload.fitness)
+      ? ({
+          activePhaseId: typeof payload.fitness.activePhaseId === 'string' ? payload.fitness.activePhaseId : 'phase-0',
+          starts: isObj(payload.fitness.starts) ? payload.fitness.starts : {},
+          logs: Array.isArray(payload.fitness.logs) ? payload.fitness.logs : [],
+        } as AppState['fitness'])
+      : emptyFitness(),
+    nutrition: isObj(payload.nutrition)
+      ? ({
+          ...emptyNutrition(),
+          ...payload.nutrition,
+          days: isObj(payload.nutrition.days) ? payload.nutrition.days : {},
+          weights: Array.isArray(payload.nutrition.weights) ? payload.nutrition.weights : [],
+        } as AppState['nutrition'])
+      : emptyNutrition(),
     achievements: (isObj(payload.achievements) ? payload.achievements : {}) as AppState['achievements'],
     questPlan: cleanQuestPlan(payload.questPlan),
     settings: settings as AppState['settings'],

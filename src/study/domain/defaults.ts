@@ -1,11 +1,15 @@
 import type { AppState, Domain, Settings } from './types';
 import { REAL_STARTER_DOMAINS, buildCatalog } from './catalog';
+import { emptyNutrition } from './nutrition';
 
 /**
  * 2: DSA and HLD starter items removed from real journeys; items may carry sub-items.
  * 3: daily study-time goal default moved from 3h to 2h.
+ * 4: planner goals, training phases (fitness) and nutrition tracking.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
+
+export const emptyFitness = (): AppState['fitness'] => ({ activePhaseId: 'phase-0', starts: {}, logs: [] });
 
 export const DEFAULT_SETTINGS: Settings = {
   playerName: '',
@@ -50,6 +54,8 @@ export function createEmptyState(now: Date = new Date(), starterDomains: Domain[
     sessions: [],
     bossAttempts: [],
     goals: [],
+    fitness: emptyFitness(),
+    nutrition: emptyNutrition(),
     achievements: {},
     settings: structuredClone(DEFAULT_SETTINGS),
   };

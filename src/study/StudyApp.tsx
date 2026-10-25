@@ -21,6 +21,9 @@ import { FocusSheet } from './components/sheets/FocusSheet';
 import { BossSheet } from './components/sheets/BossSheet';
 import { TopicSheet } from './components/sheets/TopicSheet';
 import { PlanSheet } from './components/sheets/PlanSheet';
+import { WorkoutLogSheet } from './components/sheets/WorkoutLogSheet';
+import { Workout } from './views/Workout';
+import { Nutrition } from './views/Nutrition';
 import { cn } from './lib/cn';
 import type { User } from 'firebase/auth';
 // The Personal and Time workspaces are the original JS app, unchanged.
@@ -56,6 +59,8 @@ function Sheets() {
       return <TopicSheet domain={sheet.domain} topicId={sheet.topicId} />;
     case 'plan':
       return <PlanSheet key={`${sheet.itemId}-${sheet.subItemId}-${sheet.goalId}`} itemId={sheet.itemId} subItemId={sheet.subItemId} goalId={sheet.goalId} />;
+    case 'workout-log':
+      return <WorkoutLogSheet key={sheet.workoutId} phaseId={sheet.phaseId} workoutId={sheet.workoutId} />;
   }
 }
 
@@ -135,6 +140,9 @@ function Routes() {
   // Personal and Time never depend on the study onboarding.
   if (route === 'personal') return <div className="legacy"><Personal /></div>;
   if (route === 'time') return <div className="legacy"><TimeWorkspace /></div>;
+  // Training and nutrition are independent of study onboarding too.
+  if (route === 'workout') return <Workout />;
+  if (route === 'nutrition') return <Nutrition />;
   if (!state.onboarded) return <Onboarding />;
   switch (route) {
     case 'dsa':

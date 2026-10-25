@@ -7,6 +7,10 @@ import { nextItemFor } from '../engine/recommend';
 import { revisionQueues } from '../engine/revision';
 import { RUBRICS } from './catalog';
 import { dailyQuests, missions, weeklyChallenges } from '../engine/quests';
+import { logWorkout } from '../engine/fitness';
+import { addExtra, logMeal, logWeight, toggleHabit } from '../engine/nutrition';
+import { NUTRITION_PLAN } from './nutrition';
+import { PHASES } from './fitness';
 
 /**
  * Builds a realistic ~6-week demo history by replaying real actions through the
@@ -113,6 +117,47 @@ export function buildSampleState(now: Date = new Date()): AppState {
   const c = ctxFor(addDays(today, -1), 22);
   for (const [id, [tags, notes]] of Object.entries(NOTES)) {
     if (state.items.some((i) => i.id === id)) state = editItem(state, id, { tags, notes }, c);
+  }
+
+  // Training: Phase-0 started 6 days ago; FBD-1 and FBD-2 logged, FBD-3 still open this week.
+  const p0 = PHASES[0];
+  const weights: Record<string, number> = { bench: 40, 'db-shoulder-press': 10, 'cable-row': 35, 'goblet-squat': 16, rdl: 40, 'sa-db-row': 14, 'lat-pulldown': 35 };
+  ([['fbd-1', -6, 72], ['fbd-2', -4, 80]] as const).forEach(([wid, off, dur]) => {
+    const w = p0.workouts.find((x) => x.id === wid)!;
+    state = logWorkout(
+      state,
+      {
+        phaseId: p0.id,
+        workoutId: w.id,
+        date: addDays(today, off),
+        durationMin: dur,
+        cardioMin: 15,
+        formVideoShared: off === -6,
+        notes: off === -6 ? 'Bench felt stable; sent form video.' : 'RDL hinge still rounding slightly at the bottom.',
+        exercises: w.exercises.map((e, i) => ({
+          exerciseId: e.id,
+          name: e.name,
+          sets: Array.from({ length: e.sets }, (_, k) => ({ reps: Math.max(10, 15 - k - (i % 2)), weight: weights[e.id] ?? 0 })),
+        })),
+      },
+      ctxFor(addDays(today, off), 7),
+    );
+  });
+
+  // Nutrition: 12 days of mostly on-plan eating and a gently trending weight.
+  for (let i = 12; i >= 1; i--) {
+    const day = addDays(today, -i);
+    if (i === 9) continue; // one unlogged day
+    const nc = ctxFor(day, 21);
+    for (const meal of NUTRITION_PLAN.meals) {
+      const opt = meal.options[(i + meal.id.length) % meal.options.length];
+      const over = i % 5 === 0 && meal.id === 'dinner' ? 180 : 0;
+      state = logMeal(state, day, meal.id, { optionId: opt.id, cal: opt.totalCal + over, protein: opt.totalProtein }, nc);
+    }
+    if (i % 4 === 0) state = addExtra(state, day, { name: 'Diet coke', cal: 0, protein: 0 }, nc);
+    for (const h of ['sleep', 'water', 'fruitveg', 'salad']) if ((i + h.length) % 4 !== 0) state = toggleHabit(state, day, h, 'habits', true, nc);
+    for (const sId of ['protein', 'd3', 'omega3', 'creatine']) if ((i + sId.length) % 5 !== 0) state = toggleHabit(state, day, sId, 'supplements', true, nc);
+    if (i % 2 === 0) state = logWeight(state, day, 74 - (12 - i) * 0.06 + ((i * 7) % 5) * 0.1, nc);
   }
   return state;
 }

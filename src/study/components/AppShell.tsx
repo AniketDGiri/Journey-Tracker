@@ -4,6 +4,7 @@ import {
   Binary,
   Boxes,
   Clock,
+  Dumbbell,
   Home,
   Hourglass,
   LayoutGrid,
@@ -17,6 +18,7 @@ import {
   Square,
   Swords,
   Timer,
+  Utensils,
 } from 'lucide-react';
 import { useStore } from '../store/AppStore';
 import { useUI, type Route } from '../store/ui';
@@ -43,6 +45,8 @@ const NAV: { route: Route; label: string; icon: typeof LayoutGrid; group: Group 
   { route: 'analytics', label: 'Analytics', icon: BarChart3, group: 'study' },
   { route: 'personal', label: 'Personal', icon: Home, group: 'life' },
   { route: 'time', label: 'Time', icon: Hourglass, group: 'life' },
+  { route: 'workout', label: 'Workout', icon: Dumbbell, group: 'life' },
+  { route: 'nutrition', label: 'Nutrition', icon: Utensils, group: 'life' },
   { route: 'settings', label: 'Settings', icon: Settings2, group: 'system' },
 ];
 
@@ -202,7 +206,7 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
               {more && (
                 <div className="absolute right-0 top-11 z-30 w-48 rounded-xl border border-line-strong bg-surface p-1.5 shadow-2xl" onClick={() => setMore(false)}>
                   {navItems
-                    .filter((n) => ['sessions', 'quests', 'analytics', 'personal', 'time', 'settings'].includes(n.route))
+                    .filter((n) => ['sessions', 'quests', 'analytics', 'personal', 'time', 'workout', 'nutrition', 'settings'].includes(n.route))
                     .map(({ route: r, label, icon: Icon }) => (
                       <a key={r} href={`#/${r}`} className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-ink-soft hover:bg-surface-2 hover:text-ink">
                         <Icon size={16} aria-hidden="true" /> {label}

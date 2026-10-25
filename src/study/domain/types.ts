@@ -1,5 +1,8 @@
 /** Core domain model. Pure data — no UI or persistence concerns. */
 
+import type { FitnessState } from './fitness';
+import type { NutritionState } from './nutrition';
+
 export type Domain = 'dsa' | 'hld' | 'lld';
 export const DOMAINS: Domain[] = ['dsa', 'hld', 'lld'];
 
@@ -249,6 +252,9 @@ export interface AppState {
   bossAttempts: BossAttempt[];
   /** Planner commitments (see engine/plan). */
   goals: Goal[];
+  /** Training phases — independent of prep XP and streaks. */
+  fitness: FitnessState;
+  nutrition: NutritionState;
   /** Achievement id → day first earned. */
   achievements: Record<string, DayKey>;
   /**
