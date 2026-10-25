@@ -229,5 +229,10 @@ export interface AppState {
   bossAttempts: BossAttempt[];
   /** Achievement id → day first earned. */
   achievements: Record<string, DayKey>;
+  /**
+   * Daily quests the player chose for a given day (quest ids). A day with no
+   * entry shows every quest; an entry — even an empty one — shows only those.
+   */
+  questPlan?: Record<DayKey, string[]>;
   settings: Settings;
 }

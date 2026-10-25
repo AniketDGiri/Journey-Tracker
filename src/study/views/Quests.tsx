@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
-import { Award, Crown, Lock } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Award, ChevronLeft, ChevronRight, Crown, Lock } from 'lucide-react';
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
-import { dailyQuests, missions, weeklyChallenges } from '../engine/quests';
+import { availableDailyQuests, dailyQuests, missions, weeklyChallenges } from '../engine/quests';
+import { setQuestPlan } from '../engine/actions';
 import { bossStatuses } from '../engine/bosses';
 import { ACHIEVEMENTS, evaluateAchievements } from '../engine/achievements';
 import { RANKS, totalXpForLevel } from '../engine/progression';
@@ -12,10 +13,105 @@ import { Badge, Bar, Button, Panel } from '../components/ui';
 import { QuestList } from '../components/progress';
 import { DomainTag } from '../components/bits';
 
+/** Daily quests for any day, with a checklist to pick which ones to take on. */
+function DailyPlanner() {
+  const { state, today, act } = useStore();
+  const [day, setDay] = useState(today);
+  const [editing, setEditing] = useState(false);
+  const isPast = day < today;
+  const planning = !isPast && (editing || day > today);
+  const available = useMemo(() => availableDailyQuests(state, day), [state, day]);
+  const chosen = useMemo(() => dailyQuests(state, day), [state, day]);
+  const picked = new Set(chosen.map((q) => q.id));
+  const hasPlan = !!state.questPlan?.[day];
+
+  const save = (ids: string[] | null) => act((s) => setQuestPlan(s, day, ids), { silent: true });
+  const toggle = (id: string) => save(available.filter((q) => (q.id === id ? !picked.has(id) : picked.has(q.id))).map((q) => q.id));
+  const go = (to: string) => {
+    setDay(to);
+    setEditing(false);
+  };
+
+  return (
+    <Panel className="lg:col-span-6" title="Daily quests">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="ghost" onClick={() => go(addDays(day, -1))} aria-label="Previous day">
+          <ChevronLeft size={14} />
+        </Button>
+        <span className="min-w-[7rem] text-center text-sm font-medium">{formatDay(day, today)}</span>
+        <Button size="sm" variant="ghost" onClick={() => go(addDays(day, 1))} aria-label="Next day">
+          <ChevronRight size={14} />
+        </Button>
+        <input
+          type="date"
+          value={day}
+          onChange={(e) => e.target.value && go(e.target.value)}
+          aria-label="Pick a date"
+          className="rounded-md border border-line bg-surface-2 px-2 py-1 text-xs text-ink-soft"
+        />
+        {day !== today && (
+          <Button size="sm" variant="ghost" onClick={() => go(today)}>
+            Today
+          </Button>
+        )}
+      </div>
+
+      {planning ? (
+        <>
+          <p className="mb-2 text-xs text-ink-muted">Tick the quests you want to take on {day === today ? 'today' : formatDay(day, today).toLowerCase()}.</p>
+          <ul className="flex flex-col divide-y divide-line">
+            {available.map((q) => (
+              <li key={q.id}>
+                <label className="flex cursor-pointer items-center gap-3 py-3">
+                  <input type="checkbox" checked={picked.has(q.id)} onChange={() => toggle(q.id)} className="h-4 w-4 accent-violet" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      {q.domain && <DomainTag domain={q.domain} />}
+                      <span className="truncate text-sm">{q.title}</span>
+                    </div>
+                    <p className="mt-0.5 truncate text-[11px] text-ink-muted">{q.detail}</p>
+                  </div>
+                  {state.settings.gamification && <span className="num text-[11px] text-violet-soft">+{q.reward}</span>}
+                </label>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="num text-[11px] text-ink-muted">
+              {picked.size} of {available.length} selected
+            </span>
+            <span className="ml-auto flex gap-2">
+              {hasPlan && (
+                <Button size="sm" variant="ghost" onClick={() => save(null)}>
+                  Select all
+                </Button>
+              )}
+              {day <= today && (
+                <Button size="sm" variant="primary" onClick={() => setEditing(false)}>
+                  Done
+                </Button>
+              )}
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          {chosen.length ? <QuestList quests={chosen} /> : <p className="text-xs text-ink-muted">No quests chosen for this day.</p>}
+          {!isPast && (
+            <Button size="sm" variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
+              Choose quests
+            </Button>
+          )}
+        </>
+      )}
+      <p className="mt-3 text-[11px] text-ink-muted">Quests complete from what you log — they can’t be ticked off directly. Picks you make here are what shows on your dashboard.</p>
+    </Panel>
+  );
+}
+
 export function Quests() {
   const { state, today, derived } = useStore();
   const { open } = useUI();
-  const daily = useMemo(() => dailyQuests(state, today), [state, today]);
   const weekly = useMemo(() => weeklyChallenges(state, today), [state, today]);
   const mission = useMemo(() => missions(state, derived.stats).slice(0, 8), [state, derived.stats]);
   const bosses = useMemo(() => bossStatuses(state, derived.stats), [state, derived.stats]);
@@ -25,10 +121,7 @@ export function Quests() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
-      <Panel className="lg:col-span-6" title="Daily quests">
-        <QuestList quests={daily} />
-        <p className="mt-3 text-[11px] text-ink-muted">Quests complete from what you log — they can’t be ticked off directly. Resets at midnight.</p>
-      </Panel>
+      <DailyPlanner />
       <Panel className="lg:col-span-6" title={`Weekly challenges · ends ${formatDay(weekEnd, today)}`}>
         <QuestList quests={weekly} />
       </Panel>

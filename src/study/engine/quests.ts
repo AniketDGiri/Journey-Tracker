@@ -37,7 +37,15 @@ function distinct(evs: ActivityEvent[], key: (e: ActivityEvent) => string | unde
   return new Set(evs.map((e) => key(e) ?? e.id)).size;
 }
 
-export function dailyQuests(state: AppState, today: DayKey): Quest[] {
+/** The quests the player picked for `day`; every quest when nothing was picked. */
+export function dailyQuests(state: AppState, day: DayKey): Quest[] {
+  const all = availableDailyQuests(state, day);
+  const plan = state.questPlan?.[day];
+  return plan ? all.filter((q) => plan.includes(q.id)) : all;
+}
+
+/** Every daily quest that could be set for `day`, chosen or not. */
+export function availableDailyQuests(state: AppState, today: DayKey): Quest[] {
   const t = state.settings.targets;
   const xp = state.settings.xp;
   const todays = state.activity.filter((a) => a.date === today);

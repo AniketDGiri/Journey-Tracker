@@ -440,6 +440,13 @@ export function claimQuest(state: AppState, quest: Quest, ctx: Ctx): AppState {
   return grant(state, { type, ref: quest.ref, target: quest.reward, reason: quest.title, domain: quest.domain }, ctx.today, ctx.now).state;
 }
 
+/** Choose which daily quests count for `day`. `null` clears the choice (all quests show). */
+export function setQuestPlan(state: AppState, day: DayKey, ids: string[] | null): AppState {
+  const { [day]: _dropped, ...rest } = state.questPlan ?? {};
+  const questPlan = ids === null ? rest : { ...rest, [day]: ids };
+  return { ...state, questPlan: Object.keys(questPlan).length ? questPlan : undefined };
+}
+
 export function recordBossAttempt(
   state: AppState,
   input: { bossId: string; checks: Record<string, boolean>; minutes?: number; notes: string },

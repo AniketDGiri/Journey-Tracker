@@ -74,8 +74,18 @@ export function migrate(raw: unknown): AppState {
     activeSession: isObj(payload.activeSession) ? (payload.activeSession as unknown as AppState['activeSession']) : undefined,
     bossAttempts: (Array.isArray(payload.bossAttempts) ? payload.bossAttempts : []) as AppState['bossAttempts'],
     achievements: (isObj(payload.achievements) ? payload.achievements : {}) as AppState['achievements'],
+    questPlan: cleanQuestPlan(payload.questPlan),
     settings: settings as AppState['settings'],
   };
+}
+
+function cleanQuestPlan(v: unknown): Record<string, string[]> | undefined {
+  if (!isObj(v)) return undefined;
+  const out: Record<string, string[]> = {};
+  for (const [day, ids] of Object.entries(v)) {
+    if (isDayKey(day) && Array.isArray(ids)) out[day] = ids.filter((id): id is string => typeof id === 'string');
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 function cleanSubItems(v: unknown): SubItem[] {
