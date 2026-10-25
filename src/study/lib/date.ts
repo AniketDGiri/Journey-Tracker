@@ -71,3 +71,22 @@ export function shortWeekday(key: DayKey): string {
 export function monthLabel(key: DayKey): string {
   return MONTHS[parseDayKey(key).getMonth()];
 }
+
+export function startOfMonth(key: DayKey): DayKey {
+  return `${key.slice(0, 7)}-01`;
+}
+
+export function endOfMonth(key: DayKey): DayKey {
+  const d = parseDayKey(key);
+  return toDayKey(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+}
+
+export function addMonths(key: DayKey, n: number): DayKey {
+  const d = parseDayKey(startOfMonth(key));
+  return toDayKey(new Date(d.getFullYear(), d.getMonth() + n, 1));
+}
+
+export function monthYear(key: DayKey): string {
+  const d = parseDayKey(key);
+  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}

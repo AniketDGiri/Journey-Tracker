@@ -20,6 +20,7 @@ import { FinishSessionSheet, StartSessionSheet } from './components/sheets/Sessi
 import { FocusSheet } from './components/sheets/FocusSheet';
 import { BossSheet } from './components/sheets/BossSheet';
 import { TopicSheet } from './components/sheets/TopicSheet';
+import { PlanSheet } from './components/sheets/PlanSheet';
 import { cn } from './lib/cn';
 import type { User } from 'firebase/auth';
 // The Personal and Time workspaces are the original JS app, unchanged.
@@ -53,6 +54,8 @@ function Sheets() {
       return <BossSheet bossId={sheet.bossId} />;
     case 'topic':
       return <TopicSheet domain={sheet.domain} topicId={sheet.topicId} />;
+    case 'plan':
+      return <PlanSheet key={`${sheet.itemId}-${sheet.subItemId}-${sheet.goalId}`} itemId={sheet.itemId} subItemId={sheet.subItemId} goalId={sheet.goalId} />;
   }
 }
 
@@ -143,7 +146,7 @@ function Routes() {
     case 'sessions':
       return <StudyTime />;
     case 'quests':
-      return state.settings.gamification ? <Quests /> : <Dashboard />;
+      return <Quests />;
     case 'analytics':
       return <Analytics />;
     case 'settings':

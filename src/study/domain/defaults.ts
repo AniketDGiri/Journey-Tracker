@@ -49,6 +49,7 @@ export function createEmptyState(now: Date = new Date(), starterDomains: Domain[
     xp: [],
     sessions: [],
     bossAttempts: [],
+    goals: [],
     achievements: {},
     settings: structuredClone(DEFAULT_SETTINGS),
   };

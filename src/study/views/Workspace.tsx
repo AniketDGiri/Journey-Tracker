@@ -13,6 +13,7 @@ import { cn } from '../lib/cn';
 import { Bar, Button, Checkbox, Empty, Panel, Ring, Segmented } from '../components/ui';
 import { DiffDot, STATUS_ORDER, STATUS_TONE, SubItemCount } from '../components/bits';
 import { Legend, SkillTree } from '../components/progress';
+import { PlanButton } from '../components/planner';
 
 type Tab = 'tree' | 'items' | 'revision';
 type DueFilter = 'all' | 'due' | 'upcoming' | 'unscheduled' | 'weak';
@@ -375,6 +376,7 @@ function ItemTable({ items, topicName, onStatus }: { items: PracticeItem[]; topi
                         </span>
                       </button>
                       <SubItemCount item={it} expanded={isOpen} onToggle={() => toggleRow(it.id)} controls={panelId} />
+                      <PlanButton itemId={it.id} label={it.title} className="ml-auto" />
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
@@ -415,8 +417,11 @@ function ItemTable({ items, topicName, onStatus }: { items: PracticeItem[]; topi
                       <div className="animate-rise border-l border-violet/30 pl-3">
                         <ul className="grid gap-x-6 sm:grid-cols-2" aria-label={`Sub-items of ${it.title}`}>
                           {subs.map((s) => (
-                            <li key={s.id}>
-                              <Checkbox checked={s.done} onChange={() => tick(it, s.id)} label={<span className={cn(s.done && 'text-ink-muted line-through')}>{s.title}</span>} />
+                            <li key={s.id} className="flex items-center gap-1">
+                              <div className="min-w-0 flex-1">
+                                <Checkbox checked={s.done} onChange={() => tick(it, s.id)} label={<span className={cn(s.done && 'text-ink-muted line-through')}>{s.title}</span>} />
+                              </div>
+                              <PlanButton itemId={it.id} subItemId={s.id} label={s.title} />
                             </li>
                           ))}
                         </ul>

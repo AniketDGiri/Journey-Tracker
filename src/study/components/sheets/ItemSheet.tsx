@@ -11,6 +11,7 @@ import { grantedFor } from '../../engine/progression';
 import { formatDay, addDays } from '../../lib/date';
 import { Bar, Button, Confidence, Field, Modal, Segmented } from '../ui';
 import { RubricEditor, StatusPicker, DomainTag, SubItemsEditor } from '../bits';
+import { PlanTargets } from '../planner';
 
 export function ItemSheet({ itemId }: { itemId: string }) {
   const { state, act, today } = useStore();
@@ -134,6 +135,8 @@ export function ItemSheet({ itemId }: { itemId: string }) {
           )}
         </div>
         <Bar value={mastery / 100} label="Item mastery" />
+
+        <PlanTargets item={item} />
 
         {/* Revision */}
         <section aria-label="Revision" className="rounded-xl border border-line bg-surface-2/50 p-4">

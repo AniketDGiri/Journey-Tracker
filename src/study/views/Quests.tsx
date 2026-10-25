@@ -11,6 +11,7 @@ import { addDays, formatDay, startOfWeek } from '../lib/date';
 import { cn } from '../lib/cn';
 import { Badge, Bar, Button, Panel } from '../components/ui';
 import { QuestList } from '../components/progress';
+import { Planner } from '../components/planner';
 import { DomainTag } from '../components/bits';
 
 /** Daily quests for any day, with a checklist to pick which ones to take on. */
@@ -119,8 +120,16 @@ export function Quests() {
   const ledger = useMemo(() => [...state.xp].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 40), [state.xp]);
   const weekEnd = addDays(startOfWeek(today), 6);
 
+  const planner = (
+    <Panel className="lg:col-span-12" title="Planner — what you committed to and what you achieved" id="planner">
+      <Planner />
+    </Panel>
+  );
+  if (!state.settings.gamification) return <div className="grid gap-4">{planner}</div>;
+
   return (
     <div className="grid gap-4 lg:grid-cols-12">
+      {planner}
       <DailyPlanner />
       <Panel className="lg:col-span-6" title={`Weekly challenges · ends ${formatDay(weekEnd, today)}`}>
         <QuestList quests={weekly} />

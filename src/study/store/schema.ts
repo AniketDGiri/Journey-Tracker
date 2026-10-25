@@ -1,4 +1,4 @@
-import type { AppState, SubItem } from '../domain/types';
+import type { AppState, Goal, SubItem } from '../domain/types';
 import { DEFAULT_SETTINGS, SCHEMA_VERSION } from '../domain/defaults';
 import { isDayKey } from '../lib/date';
 
@@ -73,6 +73,7 @@ export function migrate(raw: unknown): AppState {
     sessions: (Array.isArray(payload.sessions) ? payload.sessions : []) as AppState['sessions'],
     activeSession: isObj(payload.activeSession) ? (payload.activeSession as unknown as AppState['activeSession']) : undefined,
     bossAttempts: (Array.isArray(payload.bossAttempts) ? payload.bossAttempts : []) as AppState['bossAttempts'],
+    goals: cleanGoals(payload.goals),
     achievements: (isObj(payload.achievements) ? payload.achievements : {}) as AppState['achievements'],
     questPlan: cleanQuestPlan(payload.questPlan),
     settings: settings as AppState['settings'],
@@ -92,7 +93,17 @@ function cleanSubItems(v: unknown): SubItem[] {
   if (!Array.isArray(v)) return [];
   return v
     .filter((s): s is Record<string, unknown> => isObj(s) && typeof s.id === 'string' && typeof s.title === 'string')
-    .map((s) => ({ id: s.id as string, title: s.title as string, done: s.done === true }));
+    .map((s) => ({ id: s.id as string, title: s.title as string, done: s.done === true, ...(s.done === true && isDayKey(s.doneAt) ? { doneAt: s.doneAt } : {}) }));
+}
+
+const PERIODS = new Set(['day', 'week', 'month']);
+
+function cleanGoals(v: unknown): Goal[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter(
+    (g): g is Goal =>
+      isObj(g) && typeof g.id === 'string' && typeof g.itemId === 'string' && PERIODS.has(g.period as string) && isDayKey(g.start) && isDayKey(g.createdOn),
+  );
 }
 
 export function toExport(state: AppState) {

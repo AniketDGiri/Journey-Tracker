@@ -132,7 +132,8 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
     return () => window.removeEventListener('keydown', on);
   }, [open]);
 
-  const navItems = NAV.filter((n) => !(n.route === 'quests' && !state.settings.gamification));
+  // Without gamification the Quests page is just the planner.
+  const navItems = NAV.map((n) => (n.route === 'quests' && !state.settings.gamification ? { ...n, label: 'Planner' } : n));
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[236px_1fr]">
@@ -184,7 +185,7 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
           <a href="#/dashboard" className="flex items-center gap-2 lg:hidden" aria-label="Ascend home">
             <Sigil size={22} />
           </a>
-          <h1 className="truncate text-sm font-medium text-ink-soft">{NAV.find((n) => n.route === route)?.label}</h1>
+          <h1 className="truncate text-sm font-medium text-ink-soft">{navItems.find((n) => n.route === route)?.label}</h1>
           <div className="ml-auto flex items-center gap-2">
             {/* Study Time is for logging time after the fact, so it offers no timer of its own. */}
             {((STUDY_ROUTES.has(route) && route !== 'sessions') || state.activeSession) && <SessionChip />}

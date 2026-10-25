@@ -14,7 +14,8 @@ export type Sheet =
   | { type: 'finish-session'; manual?: { domain: Domain; itemId?: string; topicId?: string } }
   | { type: 'focus'; domain?: Domain }
   | { type: 'boss'; bossId: string }
-  | { type: 'topic'; domain: Domain; topicId?: string };
+  | { type: 'topic'; domain: Domain; topicId?: string }
+  | { type: 'plan'; itemId: string; subItemId?: string; goalId?: string };
 
 interface UI {
   route: Route;

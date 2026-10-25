@@ -57,6 +57,26 @@ export interface SubItem {
   id: string;
   title: string;
   done: boolean;
+  /** Day it was ticked; absent on steps ticked before the planner existed. */
+  doneAt?: DayKey;
+}
+
+export type GoalPeriod = 'day' | 'week' | 'month';
+
+/**
+ * A planned commitment: "do this item / sub-item on this date, this week or this month".
+ * Completion is derived from real activity, never stored, so it can't drift.
+ */
+export interface Goal {
+  id: string;
+  itemId: string;
+  subItemId?: string;
+  period: GoalPeriod;
+  /** Day for `day`, Monday for `week`, the 1st for `month`. */
+  start: DayKey;
+  createdAt: Iso;
+  /** Day the goal was created — work done from this day counts. */
+  createdOn: DayKey;
 }
 
 export interface PracticeItem {
@@ -227,6 +247,8 @@ export interface AppState {
   sessions: StudySession[];
   activeSession?: ActiveSession;
   bossAttempts: BossAttempt[];
+  /** Planner commitments (see engine/plan). */
+  goals: Goal[];
   /** Achievement id → day first earned. */
   achievements: Record<string, DayKey>;
   /**

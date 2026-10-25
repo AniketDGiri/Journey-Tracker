@@ -8,6 +8,7 @@ import { ACHIEVEMENTS } from '../engine/achievements';
 import { addDays, diffDays, formatDay, startOfWeek } from '../lib/date';
 import { Button, Panel } from '../components/ui';
 import { BranchOverview, Heatmap, PlayerCard, QuestList } from '../components/progress';
+import { TodayPlan } from '../components/planner';
 import { CountdownCard, MotivationCard, StudyTimeCard } from '../components/journey';
 import { DomainTag } from '../components/bits';
 import { DOMAIN_META } from '../domain/catalog';
@@ -211,6 +212,9 @@ export function Dashboard() {
           )
         }
       >
+        <div className="mb-3 border-b border-line pb-3">
+          <TodayPlan />
+        </div>
         <QuestList quests={quests} compact />
         {game && (
           <div className="mt-3 border-t border-line pt-3">

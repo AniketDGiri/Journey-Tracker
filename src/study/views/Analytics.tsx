@@ -4,6 +4,7 @@ import { DOMAIN_META } from '../domain/catalog';
 import { useStore } from '../store/AppStore';
 import { domainMastery } from '../engine/mastery';
 import { isLearned } from '../engine/revision';
+import { evaluateGoals, goalsWithin, rollup } from '../engine/plan';
 import { addDays, diffDays, formatDay, startOfWeek } from '../lib/date';
 import { Bar, Panel, Segmented } from '../components/ui';
 import { Heatmap } from '../components/progress';
@@ -73,6 +74,14 @@ export function Analytics() {
     return { labels: starts.map((s) => formatDay(s)), learned, reviews, hours: minutes.map((m) => Math.round(m / 6) / 10) };
   }, [state.activity, state.sessions, today, weeks]);
 
+  const plan = useMemo(() => {
+    const views = evaluateGoals(state, today);
+    const ws = startOfWeek(today);
+    const starts = Array.from({ length: weeks }, (_, i) => addDays(ws, -(weeks - 1 - i) * 7));
+    const per = starts.map((s) => rollup(goalsWithin(views, s, addDays(s, 6))));
+    return { pct: per.map((r) => (r.total ? Math.round(r.rate * 100) : 0)), all: rollup(views.filter((v) => v.status !== 'open')) };
+  }, [state, today, weeks]);
+
   const recall = useMemo(() => {
     const r = state.activity.filter((a) => a.type === 'review' && diffDays(a.date, today) < 30);
     const c = { success: 0, partial: 0, fail: 0 };
@@ -125,6 +134,21 @@ export function Analytics() {
           <p className="mt-2 text-[11px] text-ink-muted">Time is context, not the goal — outcomes above matter more.</p>
         </Panel>
       </div>
+
+      <Panel title="Plan completion by week">
+        <div className="grid gap-6 md:grid-cols-[1fr_220px]">
+          <WeekBars title="Planned goals achieved per week" values={plan.pct} labels={weekly.labels} unit="%" />
+          <dl className="flex flex-col gap-3 text-sm">
+            <div>
+              <dt className="st-label">All closed goals</dt>
+              <dd className="num mt-1 text-2xl font-semibold">{plan.all.total ? `${Math.round(plan.all.rate * 100)}%` : '—'}</dd>
+            </div>
+            <div className="text-xs text-ink-muted">
+              {plan.all.done} achieved · {plan.all.missed} not done. Open goals are excluded until their day, week or month ends.
+            </div>
+          </dl>
+        </div>
+      </Panel>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel title="Recall quality · 30 days">

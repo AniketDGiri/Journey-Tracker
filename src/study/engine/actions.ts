@@ -5,6 +5,8 @@ import type {
   BossAttempt,
   DayKey,
   Domain,
+  Goal,
+  GoalPeriod,
   ItemStatus,
   Iso,
   PracticeItem,
@@ -26,6 +28,7 @@ import { computeStreak } from './streak';
 import { ACHIEVEMENTS, evaluateAchievements } from './achievements';
 import { BOSSES, bossReward, bossScore } from './bosses';
 import type { Quest } from './quests';
+import { periodStart } from './plan';
 
 /**
  * All state transitions live here as pure functions: (state, input, ctx) → state.
@@ -125,7 +128,7 @@ export function addItem(state: AppState, input: NewItemInput, ctx: Ctx): { state
       url: input.url?.trim() || undefined,
       notes: input.notes ?? '',
       tags: input.tags ?? [],
-      subItems: cleanSubItems(input.subItems ?? []),
+      subItems: cleanSubItems(input.subItems ?? [], [], ctx.today),
       custom: true,
     },
     ctx.now,
@@ -137,8 +140,17 @@ export function addItem(state: AppState, input: NewItemInput, ctx: Ctx): { state
 
 const LEARNED = new Set<ItemStatus>(['with-hints', 'independent']);
 
-function cleanSubItems(list: SubItem[]): SubItem[] {
-  return list.map((s) => ({ ...s, title: s.title.trim() })).filter((s) => s.title);
+/** Trims titles and dates each tick: newly done steps get `today`, unticked ones lose it. */
+function cleanSubItems(list: SubItem[], prev: SubItem[] = [], today?: DayKey): SubItem[] {
+  const before = new Map(prev.map((s) => [s.id, s]));
+  return list
+    .map(({ doneAt, ...s }) => {
+      const title = s.title.trim();
+      if (!s.done) return { ...s, title };
+      const at = doneAt ?? (before.get(s.id)?.done ? before.get(s.id)?.doneAt : today);
+      return at ? { ...s, title, doneAt: at } : { ...s, title };
+    })
+    .filter((s) => s.title);
 }
 
 /**
@@ -154,10 +166,13 @@ export function deriveStatus(status: ItemStatus, subItems: SubItem[] | undefined
   return status;
 }
 
-/** Stores the checklist only; callers decide the status (see deriveStatus). */
+/** Stores the checklist only; callers decide the status (see deriveStatus). Goals on removed steps go too. */
 export function setSubItems(state: AppState, id: string, subItems: SubItem[], ctx: Ctx): AppState {
   const it = findItem(state, id);
-  return replaceItem(state, { ...it, subItems: cleanSubItems(subItems), updatedAt: ctx.now });
+  const list = cleanSubItems(subItems, it.subItems, ctx.today);
+  const kept = new Set(list.map((s) => s.id));
+  const next = replaceItem(state, { ...it, subItems: list, updatedAt: ctx.now });
+  return { ...next, goals: next.goals.filter((g) => g.itemId !== id || !g.subItemId || kept.has(g.subItemId)) };
 }
 
 /** One-click tick from a list: stores it and applies the derived outcome (XP, first revision). */
@@ -173,7 +188,37 @@ export function toggleSubItem(state: AppState, id: string, subId: string, ctx: C
 export function deleteItem(state: AppState, id: string): AppState {
   findItem(state, id);
   // XP and activity history are kept: they record work that really happened.
-  return { ...state, items: state.items.filter((i) => i.id !== id) };
+  return { ...state, items: state.items.filter((i) => i.id !== id), goals: state.goals.filter((g) => g.itemId !== id) };
+}
+
+// ── Planner goals ────────────────────────────────────────────────────────
+
+function samePlan(a: Pick<Goal, 'itemId' | 'subItemId' | 'period' | 'start'>, b: Pick<Goal, 'itemId' | 'subItemId' | 'period' | 'start'>): boolean {
+  return a.itemId === b.itemId && a.subItemId === b.subItemId && a.period === b.period && a.start === b.start;
+}
+
+export function addGoal(state: AppState, input: { itemId: string; subItemId?: string; period: GoalPeriod; day: DayKey }, ctx: Ctx): AppState {
+  const it = findItem(state, input.itemId);
+  if (input.subItemId && !it.subItems?.some((s) => s.id === input.subItemId)) throw new ActionError('That sub-item no longer exists.');
+  const start = periodStart(input.period, input.day);
+  if (start < periodStart(input.period, ctx.today)) throw new ActionError('Pick today or a future date.');
+  const goal: Goal = { id: uid('goal'), itemId: it.id, subItemId: input.subItemId, period: input.period, start, createdAt: ctx.now, createdOn: ctx.today };
+  if (state.goals.some((g) => samePlan(g, goal))) throw new ActionError('Already planned for that period.');
+  return { ...state, goals: [...state.goals, goal] };
+}
+
+export function moveGoal(state: AppState, goalId: string, period: GoalPeriod, day: DayKey, ctx: Ctx): AppState {
+  const g = state.goals.find((x) => x.id === goalId);
+  if (!g) throw new ActionError('That goal no longer exists.');
+  const start = periodStart(period, day);
+  if (start < periodStart(period, ctx.today)) throw new ActionError('Pick today or a future date.');
+  if (state.goals.some((x) => x.id !== goalId && samePlan(x, { ...g, period, start }))) throw new ActionError('Already planned for that period.');
+  // Moving re-commits from today, so earlier work doesn't silently complete it.
+  return { ...state, goals: state.goals.map((x) => (x.id === goalId ? { ...x, period, start, createdOn: ctx.today } : x)) };
+}
+
+export function removeGoal(state: AppState, goalId: string): AppState {
+  return { ...state, goals: state.goals.filter((g) => g.id !== goalId) };
 }
 
 export interface ProgressInput {
@@ -323,6 +368,7 @@ export function deleteTopic(state: AppState, id: string): AppState {
     ...state,
     topics: state.topics.filter((t) => t.id !== id).map((t) => ({ ...t, prerequisites: t.prerequisites.filter((p) => p !== id) })),
     items: state.items.filter((i) => i.topicId !== id),
+    goals: state.goals.filter((g) => state.items.find((i) => i.id === g.itemId)?.topicId !== id),
   };
 }
 
