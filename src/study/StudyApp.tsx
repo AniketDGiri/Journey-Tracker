@@ -24,11 +24,11 @@ import { PlanSheet } from './components/sheets/PlanSheet';
 import { WorkoutLogSheet } from './components/sheets/WorkoutLogSheet';
 import { Workout } from './views/Workout';
 import { Nutrition } from './views/Nutrition';
+import { Personal } from './views/Personal';
 import { cn } from './lib/cn';
 import type { User } from 'firebase/auth';
 // The Personal and Time workspaces are the original JS app, unchanged.
 import { useAppStore as useLegacyStore } from '../store/AppStore';
-import Personal from '../components/Personal/Personal';
 import TimeTracker from '../components/Personal/TimeTracker';
 import ExportImport from '../components/common/ExportImport';
 import { Card as LegacyCard } from '../components/common/ui';
@@ -138,7 +138,7 @@ function Routes() {
   const { route } = useUI();
   const { state } = useStore();
   // Personal and Time never depend on the study onboarding.
-  if (route === 'personal') return <div className="legacy"><Personal /></div>;
+  if (route === 'personal') return <Personal />;
   if (route === 'time') return <div className="legacy"><TimeWorkspace /></div>;
   // Training and nutrition are independent of study onboarding too.
   if (route === 'workout') return <Workout />;
