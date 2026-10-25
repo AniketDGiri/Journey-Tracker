@@ -7,7 +7,8 @@ export type Route = 'dashboard' | 'dsa' | 'hld' | 'lld' | 'revision' | 'sessions
 const ROUTES: Route[] = ['dashboard', 'dsa', 'hld', 'lld', 'revision', 'sessions', 'quests', 'analytics', 'settings', 'personal', 'time'];
 
 export type Sheet =
-  | { type: 'log'; domain?: Domain; itemId?: string }
+  /** `mode: 'new'` opens straight on a blank item form, pre-set to `topicId`. */
+  | { type: 'log'; domain?: Domain; itemId?: string; mode?: 'new' | 'existing'; topicId?: string }
   | { type: 'item'; itemId: string }
   | { type: 'start-session'; domain?: Domain; itemId?: string }
   | { type: 'finish-session'; manual?: { domain: Domain; itemId?: string; topicId?: string } }

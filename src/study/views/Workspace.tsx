@@ -116,8 +116,11 @@ export function Workspace({ domain }: { domain: Domain }) {
           </div>
         </dl>
         <div className="flex flex-wrap gap-2">
-          <Button variant="primary" size="sm" onClick={() => open({ type: 'log', domain })}>
-            <Plus size={14} aria-hidden="true" /> Log / add
+          <Button variant="primary" size="sm" onClick={() => open({ type: 'log', domain, mode: 'new', topicId: topic })}>
+            <Plus size={14} aria-hidden="true" /> Add item
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => open({ type: 'log', domain, mode: 'existing' })} disabled={!items.length}>
+            Log progress
           </Button>
           <Button variant="secondary" size="sm" onClick={() => open({ type: 'focus', domain })} disabled={!dueItems.length}>
             <RotateCcw size={14} aria-hidden="true" /> Revise {dueItems.length || ''}
@@ -253,6 +256,14 @@ export function Workspace({ domain }: { domain: Domain }) {
 
       {tab === 'items' && (
         <Panel>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-ink-muted">
+              {topic ? <>Showing <span className="text-ink">{topicName.get(topic)}</span></> : 'All topics'} · <span className="num">{filtered.length}</span> item{filtered.length === 1 ? '' : 's'}
+            </p>
+            <Button size="sm" variant="primary" onClick={() => open({ type: 'log', domain, mode: 'new', topicId: topic })}>
+              <Plus size={14} aria-hidden="true" /> Add item{topic ? ` to ${topicName.get(topic)}` : ''}
+            </Button>
+          </div>
           <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_repeat(5,auto)]">
             <div className="relative">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
@@ -298,7 +309,7 @@ export function Workspace({ domain }: { domain: Domain }) {
           </div>
           {filtered.length === 0 ? (
             <Empty title="No items match these filters">
-              <Button size="sm" variant="secondary" className="mt-2" onClick={() => open({ type: 'log', domain })}>
+              <Button size="sm" variant="secondary" className="mt-2" onClick={() => open({ type: 'log', domain, mode: 'new', topicId: topic })}>
                 Add an item
               </Button>
             </Empty>

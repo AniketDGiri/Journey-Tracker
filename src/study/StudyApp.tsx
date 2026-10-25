@@ -40,7 +40,7 @@ function Sheets() {
   if (!sheet) return null;
   switch (sheet.type) {
     case 'log':
-      return <LogSheet key={`${sheet.domain}-${sheet.itemId}`} domain={sheet.domain} itemId={sheet.itemId} />;
+      return <LogSheet key={`${sheet.domain}-${sheet.itemId}-${sheet.mode}-${sheet.topicId}`} domain={sheet.domain} itemId={sheet.itemId} mode={sheet.mode} topicId={sheet.topicId} />;
     case 'item':
       return <ItemSheet key={sheet.itemId} itemId={sheet.itemId} />;
     case 'start-session':

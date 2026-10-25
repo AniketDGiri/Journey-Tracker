@@ -16,28 +16,41 @@ const KINDS: Record<Domain, ItemKind[]> = {
 };
 
 /** One sheet to record progress on an existing item or quick-add a new one. */
-export function LogSheet({ domain: initialDomain, itemId: initialItem }: { domain?: Domain; itemId?: string }) {
+export function LogSheet({
+  domain: initialDomain,
+  itemId: initialItem,
+  mode: initialMode,
+  topicId: initialTopic,
+}: {
+  domain?: Domain;
+  itemId?: string;
+  mode?: 'new' | 'existing';
+  topicId?: string;
+}) {
   const { state, act } = useStore();
   const { close } = useUI();
   const preset = initialItem ? state.items.find((i) => i.id === initialItem) : undefined;
   const startDomain = preset?.domain ?? initialDomain ?? 'dsa';
   const hasItems = (d: Domain) => state.items.some((i) => i.domain === d);
   // Nothing to pick from yet → start on "New item".
-  const [mode, setMode] = useState<'existing' | 'new'>(preset || hasItems(startDomain) ? 'existing' : 'new');
+  const [mode, setMode] = useState<'existing' | 'new'>(initialMode ?? (preset || hasItems(startDomain) ? 'existing' : 'new'));
   const [domain, setDomain] = useState<Domain>(startDomain);
   const [itemId, setItemId] = useState<string | undefined>(preset?.id);
   const item = itemId ? state.items.find((i) => i.id === itemId) : undefined;
 
   // New-item fields
   const domainTopics = useMemo(() => state.topics.filter((t) => t.domain === domain).sort((a, b) => a.tier - b.tier), [state.topics, domain]);
-  const [topicId, setTopicId] = useState(domainTopics[0]?.id ?? '');
+  const [topicId, setTopicId] = useState(domainTopics.some((t) => t.id === initialTopic) ? initialTopic! : (domainTopics[0]?.id ?? ''));
+  const [added, setAdded] = useState(0);
   const [kind, setKind] = useState<ItemKind>(KINDS[domain][0]);
   const [title, setTitle] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [url, setUrl] = useState('');
 
   // Outcome fields
-  const [status, setStatus] = useState<ItemStatus>(preset?.status === 'not-started' || !preset ? 'independent' : preset.status);
+  // Adding to the plan starts an item as not started; quick-logging a fresh solve defaults to solved.
+  const newDefault: ItemStatus = initialMode === 'new' ? 'not-started' : 'independent';
+  const [status, setStatus] = useState<ItemStatus>(!preset ? newDefault : preset.status === 'not-started' ? 'independent' : preset.status);
   const [confidence, setConfidence] = useState(preset?.confidence ?? 0);
   const [minutes, setMinutes] = useState('');
   const [rubric, setRubric] = useState<Record<string, boolean>>(preset?.rubric ?? {});
@@ -46,7 +59,7 @@ export function LogSheet({ domain: initialDomain, itemId: initialItem }: { domai
   const onSubItems = (list: SubItem[]) => {
     setSubItemList(list);
     // A new item has no history, so its outcome follows the checklist exactly.
-    if (mode === 'new') setStatus(list.length ? deriveStatus('not-started', list) : 'independent');
+    if (mode === 'new') setStatus(list.length ? deriveStatus('not-started', list) : newDefault);
     else setStatus((s) => deriveStatus(s, list));
   };
 
@@ -82,7 +95,7 @@ export function LogSheet({ domain: initialDomain, itemId: initialItem }: { domai
 
   const canSubmit = mode === 'existing' ? !!item : !!title.trim() && !!topicId;
 
-  const submit = () => {
+  const submit = (another = false) => {
     const fb = act(
       (s, ctx) => {
         let id = itemId!;
@@ -98,14 +111,25 @@ export function LogSheet({ domain: initialDomain, itemId: initialItem }: { domai
       },
       { success: mode === 'new' ? `Added “${title.trim()}”` : `${item?.title} updated` },
     );
-    if (fb) close();
+    if (!fb) return;
+    if (!another) return close();
+    // Ready for the next one in the same topic.
+    setAdded((n) => n + 1);
+    setTitle('');
+    setUrl('');
+    setSubItemList([]);
+    setStatus(newDefault);
+    setConfidence(0);
+    setMinutes('');
+    setRubric({});
+    window.setTimeout(() => document.getElementById('log-title')?.focus(), 0);
   };
 
   return (
     <Modal
       open
       onClose={close}
-      title="Log progress"
+      title={mode === 'new' ? 'Add item' : 'Log progress'}
       wide
       footer={
         <>
@@ -126,7 +150,12 @@ export function LogSheet({ domain: initialDomain, itemId: initialItem }: { domai
           <Button variant="ghost" onClick={close}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} disabled={!canSubmit}>
+          {mode === 'new' && (
+            <Button variant="secondary" onClick={() => submit(true)} disabled={!canSubmit}>
+              Save & add another
+            </Button>
+          )}
+          <Button variant="primary" onClick={() => submit()} disabled={!canSubmit}>
             Save
           </Button>
         </>
@@ -158,6 +187,11 @@ export function LogSheet({ domain: initialDomain, itemId: initialItem }: { domai
           <ItemPicker domain={domain} value={itemId} onChange={setItemId} />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
+            {added > 0 && (
+              <p className="text-xs text-jade sm:col-span-2" role="status">
+                {added} added to {domainTopics.find((t) => t.id === topicId)?.name ?? DOMAIN_META[domain].short} — add the next one, or Save to finish.
+              </p>
+            )}
             <Field label="Title" htmlFor="log-title">
               <input id="log-title" className="st-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={domain === 'dsa' ? 'e.g. Longest Palindromic Substring' : 'e.g. Consistent hashing'} autoFocus />
             </Field>
