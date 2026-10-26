@@ -5,7 +5,7 @@ import { useUI } from '../store/ui';
 import { availableDailyQuests, dailyQuests, missions, weeklyChallenges } from '../engine/quests';
 import { setQuestPlan } from '../engine/actions';
 import { bossStatuses } from '../engine/bosses';
-import { ACHIEVEMENTS, evaluateAchievements } from '../engine/achievements';
+import { ACHIEVEMENTS, ACHIEVEMENT_GROUPS, evaluateAchievements } from '../engine/achievements';
 import { RANKS, totalXpForLevel } from '../engine/progression';
 import { addDays, formatDay, startOfWeek } from '../lib/date';
 import { cn } from '../lib/cn';
@@ -117,6 +117,16 @@ export function Quests() {
   const mission = useMemo(() => missions(state, derived.stats).slice(0, 8), [state, derived.stats]);
   const bosses = useMemo(() => bossStatuses(state, derived.stats), [state, derived.stats]);
   const ach = useMemo(() => evaluateAchievements({ state, today, streak: derived.streak }), [state, today, derived.streak]);
+  // The three unearned achievements you are furthest along on, to aim at next.
+  const nextUp = useMemo(
+    () =>
+      ach
+        .filter((a) => !a.earned && a.current > 0)
+        .sort((x, y) => y.current / y.target - x.current / x.target)
+        .slice(0, 3)
+        .map((a) => ({ a, def: ACHIEVEMENTS.find((d) => d.id === a.id)! })),
+    [ach],
+  );
   const ledger = useMemo(() => [...state.xp].sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 40), [state.xp]);
   const weekEnd = addDays(startOfWeek(today), 6);
 
@@ -193,22 +203,64 @@ export function Quests() {
       </Panel>
 
       <Panel className="lg:col-span-7" title={`Achievements · ${ach.filter((a) => a.earned).length}/${ach.length}`}>
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {ach.map((a) => {
-            const def = ACHIEVEMENTS.find((d) => d.id === a.id)!;
+        {nextUp.length > 0 && (
+          <div className="mb-5 rounded-xl border border-violet/30 bg-violet/[0.05] p-3.5">
+            <p className="st-label mb-2">Closest to unlocking</p>
+            <ul className="flex flex-col gap-2.5">
+              {nextUp.map(({ a, def }) => (
+                <li key={a.id} className="flex items-center gap-3">
+                  <Award size={16} className="shrink-0 text-violet-soft" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-ink">
+                      {def.name} <span className="text-[11px] text-ink-muted">· {def.description}</span>
+                    </p>
+                    <Bar value={a.current / a.target} className="mt-1.5" label={`${def.name} progress`} />
+                  </div>
+                  <span className="num shrink-0 text-[11px] text-ink-soft">
+                    {a.current}/{a.target}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="flex flex-col gap-5">
+          {ACHIEVEMENT_GROUPS.map((group) => {
+            const list = ach.filter((a) => ACHIEVEMENTS.find((d) => d.id === a.id)?.group === group);
+            if (!list.length) return null;
             return (
-              <li key={a.id} className={cn('flex items-center gap-3 rounded-lg border px-3 py-2.5', a.earned ? 'border-violet/30 bg-violet/[0.05]' : 'border-line')}>
-                <Award size={16} className={a.earned ? 'text-violet-soft' : 'text-ink-faint'} aria-hidden="true" />
-                <div className="min-w-0 flex-1">
-                  <p className={cn('text-sm', a.earned ? 'text-ink' : 'text-ink-soft')}>{def.name}</p>
-                  <p className="truncate text-[11px] text-ink-muted">{def.description}</p>
-                  {!a.earned && <Bar value={a.current / a.target} tone="muted" className="mt-1.5" label={`${def.name} progress`} />}
-                </div>
-                {a.earned ? <Badge tone="violet">{formatDay(state.achievements[a.id] ?? today, today)}</Badge> : <span className="num text-[11px] text-ink-muted">{a.current}/{a.target}</span>}
-              </li>
+              <section key={group} aria-label={group}>
+                <p className="st-label mb-2">
+                  {group} <span className="num text-ink-faint">· {list.filter((a) => a.earned).length}/{list.length}</span>
+                </p>
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {list.map((a) => {
+                    const def = ACHIEVEMENTS.find((d) => d.id === a.id)!;
+                    return (
+                      <li key={a.id} className={cn('flex items-center gap-3 rounded-lg border px-3 py-2.5', a.earned ? 'border-violet/30 bg-violet/[0.05]' : 'border-line')}>
+                        <Award size={16} className={a.earned ? 'text-violet-soft' : 'text-ink-faint'} aria-hidden="true" />
+                        <div className="min-w-0 flex-1">
+                          <p className={cn('text-sm', a.earned ? 'text-ink' : 'text-ink-soft')}>{def.name}</p>
+                          <p className="truncate text-[11px] text-ink-muted" title={def.description}>
+                            {def.description}
+                          </p>
+                          {!a.earned && <Bar value={a.current / a.target} tone="muted" className="mt-1.5" label={`${def.name} progress`} />}
+                        </div>
+                        {a.earned ? (
+                          <Badge tone="violet">{formatDay(state.achievements[a.id] ?? today, today)}</Badge>
+                        ) : (
+                          <span className="num text-[11px] text-ink-muted">
+                            {a.current}/{a.target}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             );
           })}
-        </ul>
+        </div>
       </Panel>
 
       <Panel className="lg:col-span-5" title="XP ledger">

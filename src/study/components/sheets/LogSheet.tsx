@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Difficulty, Domain, ItemKind, ItemStatus, SubItem } from '../../domain/types';
-import { DOMAIN_META, KIND_LABELS } from '../../domain/catalog';
+import type { Difficulty, Domain, ItemKind, ItemStatus, RecallQuality, SubItem } from '../../domain/types';
+import { DOMAIN_META, KIND_LABELS, STATUS_LABELS } from '../../domain/catalog';
+import { formatDay } from '../../lib/date';
 import { useStore } from '../../store/AppStore';
 import { useUI } from '../../store/ui';
-import { addItem, deriveStatus, logProgress, outcomeTarget, setSubItems } from '../../engine/actions';
+import { addItem, deriveStatus, logProgress, outcomeTarget, reviewItem, setSubItems, type Ctx } from '../../engine/actions';
 import { grantedFor } from '../../engine/progression';
 import { Button, Confidence, Field, Modal, Segmented } from '../ui';
 import { ItemPicker } from '../ItemPicker';
@@ -27,7 +28,7 @@ export function LogSheet({
   mode?: 'new' | 'existing';
   topicId?: string;
 }) {
-  const { state, act } = useStore();
+  const { state, act, today } = useStore();
   const { close } = useUI();
   const preset = initialItem ? state.items.find((i) => i.id === initialItem) : undefined;
   const startDomain = preset?.domain ?? initialDomain ?? 'dsa';
@@ -55,6 +56,19 @@ export function LogSheet({
   const [minutes, setMinutes] = useState('');
   const [rubric, setRubric] = useState<Record<string, boolean>>(preset?.rubric ?? {});
   const [subItems, setSubItemList] = useState<SubItem[]>(preset?.subItems ?? []);
+
+  // Revising: an item studied earlier but never recorded, being revised now.
+  const [revising, setRevising] = useState(false);
+  const [studiedOn, setStudiedOn] = useState('');
+  const [recall, setRecall] = useState<RecallQuality>('success');
+  const isRevising = mode === 'new' && revising;
+  const learned = status === 'with-hints' || status === 'independent';
+
+  const onRevising = (on: boolean) => {
+    setRevising(on);
+    // Revising means it was already understood: start from "Understood with notes" rather than "Studying".
+    if (on && !learned) setStatus('with-hints');
+  };
 
   const onSubItems = (list: SubItem[]) => {
     setSubItemList(list);
@@ -100,16 +114,21 @@ export function LogSheet({
       (s, ctx) => {
         let id = itemId!;
         let next = s;
+        // A revised item's first study is recorded on the day it actually happened (never in the future).
+        const first: Ctx = isRevising && learned && studiedOn && studiedOn < ctx.today ? { today: studiedOn, now: new Date(`${studiedOn}T12:00:00`).toISOString() } : ctx;
         if (mode === 'new') {
-          const r = addItem(next, { topicId, kind, title, difficulty: kind === 'problem' || kind === 'design' || kind === 'machine-coding' ? difficulty : undefined, url, subItems }, ctx);
+          const r = addItem(next, { topicId, kind, title, difficulty: kind === 'problem' || kind === 'design' || kind === 'machine-coding' ? difficulty : undefined, url, subItems }, first);
           next = r.state;
           id = r.id;
         } else {
           next = setSubItems(next, id, subItems, ctx);
         }
-        return logProgress(next, id, { status, confidence: confidence || undefined, minutes: mins, solveTimeMin: (status === 'independent' || status === 'with-hints') && activeKind === 'problem' ? mins || undefined : undefined, rubric, practiced: mode === 'existing' && status === item?.status && status !== 'not-started' && !mins }, ctx);
+        next = logProgress(next, id, { status, confidence: confidence || undefined, minutes: mins, solveTimeMin: (status === 'independent' || status === 'with-hints') && activeKind === 'problem' ? mins || undefined : undefined, rubric, practiced: mode === 'existing' && status === item?.status && status !== 'not-started' && !mins }, first);
+        // Today's revision: moves its schedule on from the first study instead of leaving it due tomorrow.
+        if (isRevising && learned) next = reviewItem(next, id, recall, ctx);
+        return next;
       },
-      { success: mode === 'new' ? `Added “${title.trim()}”` : `${item?.title} updated` },
+      { success: mode === 'new' ? `Added “${title.trim()}”${isRevising && learned ? ' and logged today’s revision' : ''}` : `${item?.title} updated` },
     );
     if (!fb) return;
     if (!another) return close();
@@ -118,7 +137,8 @@ export function LogSheet({
     setTitle('');
     setUrl('');
     setSubItemList([]);
-    setStatus(newDefault);
+    // Adding several old topics in a row keeps the revising choice, date and recall.
+    setStatus(isRevising ? 'with-hints' : newDefault);
     setConfidence(0);
     setMinutes('');
     setRubric({});
@@ -223,6 +243,51 @@ export function LogSheet({
         {(mode === 'new' || item) && (
           <div className="flex flex-col gap-4 border-t border-line pt-5">
             <SubItemsEditor value={subItems} onChange={onSubItems} />
+            {mode === 'new' && (
+              <fieldset className="flex flex-col gap-3 rounded-lg border border-line p-3">
+                <legend className="px-1 text-xs font-medium text-ink-soft">When did you study this?</legend>
+                <Segmented
+                  label="When did you study this"
+                  size="sm"
+                  value={revising ? 'revising' : 'first'}
+                  onChange={(v) => onRevising(v === 'revising')}
+                  options={[
+                    { value: 'first', label: 'Just now' },
+                    { value: 'revising', label: 'Studied earlier, revising now' },
+                  ]}
+                />
+                {revising && (
+                  <div className="flex flex-wrap items-end gap-4">
+                    <Field label="First studied (optional)" htmlFor="log-studied" hint="Leave blank if you don't remember.">
+                      <input id="log-studied" type="date" className="st-input num w-44" max={today} value={studiedOn} onChange={(e) => setStudiedOn(e.target.value)} />
+                    </Field>
+                    <Field label="How did the recall go?">
+                      <Segmented
+                        label="Recall"
+                        size="sm"
+                        value={recall}
+                        onChange={setRecall}
+                        options={[
+                          { value: 'success', label: 'Recalled' },
+                          { value: 'partial', label: 'Partial' },
+                          { value: 'fail', label: 'Forgot' },
+                        ]}
+                      />
+                    </Field>
+                  </div>
+                )}
+                {revising && !learned && (
+                  <p className="text-xs text-ember-soft" role="status">
+                    Pick “{STATUS_LABELS[kind]['with-hints']}” or higher below, or this is saved as plain progress without a revision.
+                  </p>
+                )}
+                {revising && learned && (
+                  <p className="text-xs text-ink-muted">
+                    Saved as studied{studiedOn && studiedOn < today ? ` on ${formatDay(studiedOn, today)}` : ''}, with today's revision logged. Its next revision is scheduled from today.
+                  </p>
+                )}
+              </fieldset>
+            )}
             <Field label="Outcome">
               <StatusPicker kind={activeKind} value={status} onChange={setStatus} />
             </Field>

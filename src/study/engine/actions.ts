@@ -517,7 +517,7 @@ export function syncAchievements(state: AppState, ctx: Ctx): { state: AppState; 
     if (r.earned && !next.achievements[r.id]) {
       const def = ACHIEVEMENTS.find((a) => a.id === r.id)!;
       next = { ...next, achievements: { ...next.achievements, [r.id]: ctx.today } };
-      next = grant(next, { type: 'achievement', ref: r.id, target: state.settings.xp.achievement, reason: `Achievement · ${def.name}` }, ctx.today, ctx.now).state;
+      next = grant(next, { type: 'achievement', ref: r.id, target: Math.round(state.settings.xp.achievement * (def.reward ?? 1)), reason: `Achievement · ${def.name}` }, ctx.today, ctx.now).state;
       earned.push(def.name);
     }
   }
