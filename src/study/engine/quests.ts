@@ -1,6 +1,7 @@
 import type { ActivityEvent, AppState, DayKey, Domain } from '../domain/types';
-import { addDays, diffDays, startOfWeek } from '../lib/date';
+import { addDays, diffDays, endOfMonth, startOfMonth, startOfWeek } from '../lib/date';
 import { grantedFor } from './progression';
+import { evaluateGoals } from './plan';
 import { isLearned } from './revision';
 import type { TopicStats } from './mastery';
 import { MASTERED_TOPIC, UNLOCK_THRESHOLD } from './mastery';
@@ -19,7 +20,7 @@ export interface Quest {
   id: string;
   /** XP ledger ref — unique per period. */
   ref: string;
-  cadence: 'daily' | 'weekly' | 'mission';
+  cadence: 'daily' | 'weekly' | 'monthly' | 'mission';
   domain?: Domain;
   title: string;
   detail: string;
@@ -198,6 +199,87 @@ export function weeklyChallenges(state: AppState, today: DayKey): Quest[] {
       detail: 'Consistency beats intensity. Rest days are fine.',
       progress: new Set(inWeek.map((a) => a.date)).size,
       target: 5,
+    }),
+  ];
+}
+
+/** Month-long challenges, sized from the daily targets so they stretch without being out of reach. */
+export function monthlyChallenges(state: AppState, today: DayKey): Quest[] {
+  const ms = startOfMonth(today);
+  const me = endOfMonth(today);
+  const inMonth = state.activity.filter((a) => a.date >= ms && a.date <= me);
+  const itemById = new Map(state.items.map((i) => [i.id, i]));
+  const t = state.settings.targets;
+  const reward = state.settings.xp.monthlyChallenge;
+  const mk = (q: Omit<Quest, 'ref' | 'claimed' | 'complete' | 'cadence' | 'reward'>): Quest => {
+    const ref = `${q.id}:${ms}`;
+    return {
+      ...q,
+      ref,
+      cadence: 'monthly',
+      reward,
+      complete: q.progress >= q.target,
+      claimed: grantedFor(state, 'monthly', ref) > 0,
+      progress: Math.min(q.progress, q.target),
+    };
+  };
+  const dsaTarget = Math.max(10, t.dsaPerDay * 10);
+  const hoursTarget = Math.max(10, Math.round((t.minutesPerDay * 20) / 60));
+  const minutes = state.sessions.filter((s) => s.date >= ms && s.date <= me).reduce((n, s) => n + s.durationMin, 0);
+  const goalsDone = evaluateGoals(state, today).filter((g) => g.status === 'done' && g.completedOn && g.completedOn >= ms && g.completedOn <= me).length;
+  return [
+    mk({
+      id: 'monthly-dsa',
+      domain: 'dsa',
+      title: `Solve ${dsaTarget} DSA problems`,
+      detail: 'Distinct problems, independent or with hints.',
+      progress: distinct(inMonth.filter((a) => a.domain === 'dsa' && a.type === 'solve'), (e) => e.itemId),
+      target: dsaTarget,
+      action: { type: 'log', domain: 'dsa' },
+    }),
+    mk({
+      id: 'monthly-design',
+      title: 'Complete 3 design or machine-coding exercises',
+      detail: 'Rubric-backed HLD designs or LLD builds.',
+      progress: distinct(
+        inMonth.filter((a) => {
+          const k = a.itemId ? itemById.get(a.itemId)?.kind : undefined;
+          return a.type === 'solve' && (k === 'design' || k === 'machine-coding');
+        }),
+        (e) => e.itemId,
+      ),
+      target: 3,
+      action: { type: 'navigate', to: 'hld' },
+    }),
+    mk({
+      id: 'monthly-recall',
+      title: 'Land 40 successful recalls',
+      detail: 'A month of spaced repetition.',
+      progress: inMonth.filter((a) => a.type === 'review' && a.quality === 'success').length,
+      target: 40,
+      action: { type: 'revise' },
+    }),
+    mk({
+      id: 'monthly-days',
+      title: 'Study on 20 different days',
+      detail: 'Rest days are fine. Most days is the goal.',
+      progress: new Set(inMonth.map((a) => a.date)).size,
+      target: 20,
+    }),
+    mk({
+      id: 'monthly-hours',
+      title: `Log ${hoursTarget} hours of focused study`,
+      detail: 'Timed or manually logged study sessions.',
+      progress: Math.floor(minutes / 60),
+      target: hoursTarget,
+      action: { type: 'navigate', to: 'sessions' },
+    }),
+    mk({
+      id: 'monthly-plan',
+      title: 'Achieve 10 planned goals',
+      detail: 'Plan items for a day, week or month — then do them.',
+      progress: goalsDone,
+      target: 10,
     }),
   ];
 }

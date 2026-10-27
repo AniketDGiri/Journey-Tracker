@@ -36,13 +36,13 @@ const GROUPS: { id: Group; label: string }[] = [
 ];
 
 const NAV: { route: Route; label: string; icon: typeof LayoutGrid; group: Group }[] = [
-  { route: 'dashboard', label: 'Dashboard', icon: LayoutGrid, group: 'study' },
+  { route: 'quests', label: 'Quests', icon: Swords, group: 'study' },
   { route: 'dsa', label: 'DSA', icon: Binary, group: 'study' },
   { route: 'hld', label: 'System Design', icon: Network, group: 'study' },
   { route: 'lld', label: 'Low-Level Design', icon: Boxes, group: 'study' },
   { route: 'revision', label: 'Revision', icon: RotateCcw, group: 'study' },
   { route: 'sessions', label: 'Study Time', icon: Clock, group: 'study' },
-  { route: 'quests', label: 'Quests', icon: Swords, group: 'study' },
+  { route: 'dashboard', label: 'Dashboard', icon: LayoutGrid, group: 'study' },
   { route: 'analytics', label: 'Analytics', icon: BarChart3, group: 'study' },
   { route: 'life', label: 'Daily Quest', icon: Crown, group: 'life' },
   { route: 'personal', label: 'Personal', icon: Home, group: 'life' },
@@ -208,7 +208,7 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
               {more && (
                 <div className="absolute right-0 top-11 z-30 w-48 rounded-xl border border-line-strong bg-surface p-1.5 shadow-2xl" onClick={() => setMore(false)}>
                   {navItems
-                    .filter((n) => ['sessions', 'quests', 'analytics', 'life', 'personal', 'time', 'workout', 'nutrition', 'settings'].includes(n.route))
+                    .filter((n) => ['sessions', 'dashboard', 'analytics', 'life', 'personal', 'time', 'workout', 'nutrition', 'settings'].includes(n.route))
                     .map(({ route: r, label, icon: Icon }) => (
                       <a key={r} href={`#/${r}`} className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-ink-soft hover:bg-surface-2 hover:text-ink">
                         <Icon size={16} aria-hidden="true" /> {label}

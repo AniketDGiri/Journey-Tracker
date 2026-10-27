@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo } from 'react';
 import { Award, Check, Flame, TriangleAlert, X } from 'lucide-react';
 import { useStore } from '../store/AppStore';
 import { useUI, type Route } from '../store/ui';
@@ -8,6 +8,7 @@ import { totalXpForLevel } from '../engine/progression';
 import { formatDay, shortWeekday } from '../lib/date';
 import { cn } from '../lib/cn';
 import { Badge, Bar, Button, Panel, Ring } from '../components/ui';
+import { SystemWindow } from '../components/system';
 
 /** Where each objective is done, so the quest can send you straight there. */
 const OBJECTIVE_ROUTE: Record<ObjectiveId, Route> = {
@@ -18,16 +19,6 @@ const OBJECTIVE_ROUTE: Record<ObjectiveId, Route> = {
   habits: 'nutrition',
   side: 'personal',
 };
-
-function SystemWindow({ children, label, className }: { children: ReactNode; label: string; className?: string }) {
-  return (
-    <section aria-label={label} className={cn('relative rounded-xl border border-arc-soft/45 bg-surface p-5 shadow-glow-arc sm:px-6', className)}>
-      <span aria-hidden="true" className="absolute -left-px -top-px h-3.5 w-3.5 rounded-tl-xl border-l-2 border-t-2 border-arc-soft" />
-      <span aria-hidden="true" className="absolute -bottom-px -right-px h-3.5 w-3.5 rounded-br-xl border-b-2 border-r-2 border-arc-soft" />
-      {children}
-    </section>
-  );
-}
 
 export function LifeSystem() {
   const { state, today } = useStore();
@@ -162,12 +153,18 @@ export function LifeSystem() {
               title={`${formatDay(d.day, today)}: ${d.done}/${d.total}${d.perfect ? ' · perfect' : d.cleared ? ' · cleared' : ''}`}
               className={cn(
                 'flex flex-col items-center gap-1 rounded-lg border px-1 py-2',
-                d.perfect ? 'border-jade/50 bg-jade/10' : d.cleared ? 'border-arc-soft/50 bg-arc/10' : d.day === today ? 'border-line-strong' : 'border-line',
+                d.perfect ? 'border-jade bg-jade/25' : d.cleared ? 'border-arc-soft/70 bg-arc/20' : d.day === today ? 'border-line-strong' : 'border-line',
               )}
             >
-              <span className="text-[10px] uppercase text-ink-muted">{shortWeekday(d.day)}</span>
-              {d.cleared ? <Check size={14} className={d.perfect ? 'text-jade' : 'text-arc-soft'} aria-hidden="true" /> : d.day === today ? <span className="h-3.5" /> : <X size={14} className="text-ink-faint" aria-hidden="true" />}
-              <span className="num text-[10px] text-ink-muted">
+              <span className={cn('text-[10px] uppercase', d.perfect ? 'font-semibold text-jade' : d.cleared ? 'text-arc-soft' : 'text-ink-muted')}>{shortWeekday(d.day)}</span>
+              {d.cleared ? (
+                <Check size={16} strokeWidth={3} className={d.perfect ? 'text-jade' : 'text-arc-soft'} aria-hidden="true" />
+              ) : d.day === today ? (
+                <span className="h-4" />
+              ) : (
+                <X size={14} className="text-ink-faint" aria-hidden="true" />
+              )}
+              <span className={cn('num text-[10px]', d.perfect ? 'font-semibold text-jade' : d.cleared ? 'text-arc-soft' : 'text-ink-muted')}>
                 {d.done}/{d.total}
               </span>
             </li>
@@ -175,10 +172,10 @@ export function LifeSystem() {
         </ol>
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-muted">
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-jade/60" aria-hidden="true" /> Perfect
+            <span className="h-3 w-3 rounded-sm border border-jade bg-jade/40" aria-hidden="true" /> Perfect
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm bg-arc/60" aria-hidden="true" /> Cleared ({CLEAR_AT}+)
+            <span className="h-3 w-3 rounded-sm border border-arc-soft/70 bg-arc/30" aria-hidden="true" /> Cleared ({CLEAR_AT}+)
           </span>
           <span>Personal tasks cleared before today’s update have no date, so they count for XP but not for past days.</span>
         </p>

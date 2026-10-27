@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
     sessionComplete: 10,
     dailyQuest: 15,
     weeklyChallenge: 100,
+    monthlyChallenge: 250,
     mission: 40,
     achievement: 25,
   },

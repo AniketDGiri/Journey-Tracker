@@ -482,7 +482,7 @@ export function deleteSession(state: AppState, id: string): AppState {
 export function claimQuest(state: AppState, quest: Quest, ctx: Ctx): AppState {
   if (!quest.complete) throw new ActionError('Finish the quest before claiming it.');
   if (quest.claimed) throw new ActionError('Already claimed.');
-  const type = quest.cadence === 'daily' ? 'quest' : quest.cadence === 'weekly' ? 'weekly' : 'mission';
+  const type = quest.cadence === 'daily' ? 'quest' : quest.cadence === 'weekly' ? 'weekly' : quest.cadence === 'monthly' ? 'monthly' : 'mission';
   return grant(state, { type, ref: quest.ref, target: quest.reward, reason: quest.title, domain: quest.domain }, ctx.today, ctx.now).state;
 }
 

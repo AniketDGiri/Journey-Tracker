@@ -3,6 +3,7 @@ import { CalendarPlus, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { addDays, format, parseISO } from 'date-fns';
 import { cn } from '../lib/cn';
 import { Bar, Button, Empty, Panel, Segmented } from '../components/ui';
+import { SystemTag, SystemWindow } from '../components/system';
 import {
   RANKS,
   RANK_TONE,
@@ -56,21 +57,6 @@ function RankBadge({ rank, size = 'md' }: { rank: Rank; size?: 'sm' | 'md' }) {
       {rank}
     </span>
   );
-}
-
-/** A glowing System window, the Solo Leveling frame used for notices and status. */
-function SystemWindow({ children, className, label: aria }: { children: ReactNode; className?: string; label: string }) {
-  return (
-    <section aria-label={aria} className={cn('relative rounded-xl border border-arc-soft/45 bg-surface p-5 shadow-glow-arc sm:px-6', className)}>
-      <span aria-hidden="true" className="absolute -left-px -top-px h-3.5 w-3.5 rounded-tl-xl border-l-2 border-t-2 border-arc-soft" />
-      <span aria-hidden="true" className="absolute -bottom-px -right-px h-3.5 w-3.5 rounded-br-xl border-b-2 border-r-2 border-arc-soft" />
-      {children}
-    </section>
-  );
-}
-
-function SystemTag({ children }: { children: ReactNode }) {
-  return <p className="num text-xs tracking-[0.16em] text-arc-soft">[ {children} ]</p>;
 }
 
 export function Personal() {

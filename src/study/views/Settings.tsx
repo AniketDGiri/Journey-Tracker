@@ -21,6 +21,7 @@ const XP_FIELDS: [keyof XpRules, string][] = [
   ['sessionComplete', 'Session completed'],
   ['dailyQuest', 'Daily quest'],
   ['weeklyChallenge', 'Weekly challenge'],
+  ['monthlyChallenge', 'Monthly challenge'],
   ['mission', 'Mission (prove topic)'],
   ['achievement', 'Achievement'],
 ];

@@ -140,6 +140,7 @@ export type XpSourceType =
   | 'session'
   | 'quest'
   | 'weekly'
+  | 'monthly'
   | 'mission'
   | 'boss'
   | 'achievement';
@@ -210,6 +211,7 @@ export interface XpRules {
   sessionComplete: number;
   dailyQuest: number;
   weeklyChallenge: number;
+  monthlyChallenge: number;
   mission: number;
   achievement: number;
 }
