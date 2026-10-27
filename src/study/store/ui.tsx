@@ -3,8 +3,8 @@ import type { Domain } from '../domain/types';
 
 /** UI-only state: routing and which global sheet is open. Never persisted. */
 
-export type Route = 'dashboard' | 'dsa' | 'hld' | 'lld' | 'revision' | 'sessions' | 'quests' | 'analytics' | 'settings' | 'personal' | 'time' | 'workout' | 'nutrition';
-const ROUTES: Route[] = ['dashboard', 'dsa', 'hld', 'lld', 'revision', 'sessions', 'quests', 'analytics', 'settings', 'personal', 'time', 'workout', 'nutrition'];
+export type Route = 'dashboard' | 'dsa' | 'hld' | 'lld' | 'revision' | 'sessions' | 'quests' | 'analytics' | 'settings' | 'personal' | 'time' | 'workout' | 'nutrition' | 'life';
+const ROUTES: Route[] = ['dashboard', 'dsa', 'hld', 'lld', 'revision', 'sessions', 'quests', 'analytics', 'settings', 'personal', 'time', 'workout', 'nutrition', 'life'];
 
 export type Sheet =
   /** `mode: 'new'` opens straight on a blank item form, pre-set to `topicId`. */

@@ -135,7 +135,7 @@ export function AppStoreProvider({ children }) {
     const personal = listOps('personalTasks')
     const projects = listOps('projects')
     return {
-      user, authLoading, today,
+      user, authLoading, today, dataLoaded,
       todayKey: dayKey(today),
       legacyWonDays: legacyDays,
       signIn: () => signInWithPopup(auth, googleProvider),
@@ -213,7 +213,7 @@ export function AppStoreProvider({ children }) {
         setData(fromDoc(incoming))
       },
     }
-  }, [user, authLoading, today, data, legacyDays, patch, listOps])
+  }, [user, authLoading, today, dataLoaded, data, legacyDays, patch, listOps])
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>
 }

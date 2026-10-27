@@ -25,6 +25,8 @@ import { WorkoutLogSheet } from './components/sheets/WorkoutLogSheet';
 import { Workout } from './views/Workout';
 import { Nutrition } from './views/Nutrition';
 import { Personal } from './views/Personal';
+import { LifeSystem } from './views/LifeSystem';
+import { LifeStrip, LifeWatcher } from './components/life';
 import { cn } from './lib/cn';
 import type { User } from 'firebase/auth';
 // The Personal and Time workspaces are the original JS app, unchanged.
@@ -134,15 +136,26 @@ function TimeWorkspace() {
   );
 }
 
+/** Life pages carry the Life System strip: level, rank, streak and today's Daily Quest. */
+function WithLife({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <LifeStrip />
+      {children}
+    </div>
+  );
+}
+
 function Routes() {
   const { route } = useUI();
   const { state } = useStore();
   // Personal and Time never depend on the study onboarding.
-  if (route === 'personal') return <Personal />;
+  if (route === 'personal') return <WithLife><Personal /></WithLife>;
+  if (route === 'life') return <LifeSystem />;
   if (route === 'time') return <div className="legacy"><TimeWorkspace /></div>;
   // Training and nutrition are independent of study onboarding too.
-  if (route === 'workout') return <Workout />;
-  if (route === 'nutrition') return <Nutrition />;
+  if (route === 'workout') return <WithLife><Workout /></WithLife>;
+  if (route === 'nutrition') return <WithLife><Nutrition /></WithLife>;
   if (!state.onboarded) return <Onboarding />;
   switch (route) {
     case 'dsa':
@@ -219,6 +232,7 @@ function Root({ theme, setTheme }: { theme: string; setTheme: (t: string) => voi
       </AppShell>
       <Sheets />
       <Toasts />
+      <LifeWatcher />
     </>
   );
 }

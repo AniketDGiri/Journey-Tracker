@@ -10,6 +10,7 @@ import {
   rankOf,
   rewardOf,
   sectionLabel,
+  sectionPatch,
   type PersonalProject,
   type PersonalSection,
   type PersonalTask,
@@ -172,7 +173,7 @@ function AcceptQuest({ store }: { store: LegacyStore }) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!draft.title.trim()) return;
-    addPersonalTask({ ...draft, title: draft.title.trim(), projectId: draft.projectId || null });
+    addPersonalTask({ ...draft, title: draft.title.trim(), projectId: draft.projectId || null, doneAt: draft.section === 'done' ? store.todayKey : null });
     setDraft({ ...BLANK, section: draft.section, start: draft.start });
   };
   const rank = rankOf(draft);
@@ -298,7 +299,7 @@ function QuestRow({ task: t, store }: { task: PersonalTask; store: LegacyStore }
         <input
           type="checkbox"
           checked={done}
-          onChange={(e) => update(t.id, { section: e.target.checked ? 'done' : 'todo' })}
+          onChange={(e) => update(t.id, sectionPatch(t, e.target.checked ? 'done' : 'todo', today))}
           aria-label={`${done ? 'Reopen' : 'Clear'} “${t.title}”`}
           className="h-[18px] w-[18px] shrink-0 cursor-pointer accent-violet"
         />
@@ -372,7 +373,7 @@ function QuestRow({ task: t, store }: { task: PersonalTask; store: LegacyStore }
           </label>
           <label className={label}>
             Gate
-            <select className={field} value={t.section} onChange={(e) => update(t.id, { section: e.target.value })}>
+            <select className={field} value={t.section} onChange={(e) => update(t.id, sectionPatch(t, e.target.value, today))}>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -440,7 +441,8 @@ function GateBoard({ store }: { store: LegacyStore }) {
               onDragLeave={() => setOverId((p) => (p === s.id ? null : p))}
               onDrop={(e) => {
                 e.preventDefault();
-                if (dragId) update(dragId, { section: s.id });
+                const dragged = tasks.find((x) => x.id === dragId);
+                if (dragged) update(dragged.id, sectionPatch(dragged, s.id, today));
                 setDragId(null);
                 setOverId(null);
               }}
@@ -472,7 +474,7 @@ function GateBoard({ store }: { store: LegacyStore }) {
                       <input
                         type="checkbox"
                         checked={done}
-                        onChange={(e) => update(t.id, { section: e.target.checked ? 'done' : 'todo' })}
+                        onChange={(e) => update(t.id, sectionPatch(t, e.target.checked ? 'done' : 'todo', today))}
                         aria-label={`${done ? 'Reopen' : 'Clear'} “${t.title}”`}
                         className="mt-1.5 h-4 w-4 shrink-0 cursor-pointer accent-violet"
                       />
@@ -492,7 +494,7 @@ function GateBoard({ store }: { store: LegacyStore }) {
                     <div className="flex items-center gap-2">
                       <select
                         value={t.section}
-                        onChange={(e) => update(t.id, { section: e.target.value })}
+                        onChange={(e) => update(t.id, sectionPatch(t, e.target.value, today))}
                         aria-label={`Move “${t.title}” to another gate`}
                         className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-xs text-ink-soft focus:border-violet focus:outline-none"
                       >

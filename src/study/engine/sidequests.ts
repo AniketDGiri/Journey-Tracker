@@ -15,6 +15,14 @@ export interface PersonalTask {
   start?: string;
   end?: string;
   notes?: string;
+  /** Day the task was moved to Done; null once reopened. Absent on tasks cleared before it was tracked. */
+  doneAt?: string | null;
+}
+
+/** The patch that moves a task between sections, stamping or clearing the day it was cleared. */
+export function sectionPatch(task: PersonalTask, section: string, today: string): Partial<PersonalTask> {
+  if (section === 'done') return { section, doneAt: task.section === 'done' ? (task.doneAt ?? null) : today };
+  return { section, doneAt: null };
 }
 
 export interface PersonalSection {
