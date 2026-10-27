@@ -1,6 +1,7 @@
 import type { AppState, Domain, Settings } from './types';
 import { REAL_STARTER_DOMAINS, buildCatalog } from './catalog';
 import { emptyNutrition } from './nutrition';
+import { toDayKey } from '../lib/date';
 
 /**
  * 2: DSA and HLD starter items removed from real journeys; items may carry sub-items.
@@ -14,6 +15,8 @@ export const emptyFitness = (): AppState['fitness'] => ({ activePhaseId: 'phase-
 export const DEFAULT_SETTINGS: Settings = {
   playerName: '',
   gamification: true,
+  penalties: true,
+  penaltiesSince: '',
   reducedMotion: 'system',
   intervals: [1, 3, 7, 14, 30, 60],
   xp: {
@@ -58,6 +61,6 @@ export function createEmptyState(now: Date = new Date(), starterDomains: Domain[
     fitness: emptyFitness(),
     nutrition: emptyNutrition(),
     achievements: {},
-    settings: structuredClone(DEFAULT_SETTINGS),
+    settings: { ...structuredClone(DEFAULT_SETTINGS), penaltiesSince: toDayKey(now) },
   };
 }

@@ -143,7 +143,8 @@ export type XpSourceType =
   | 'monthly'
   | 'mission'
   | 'boss'
-  | 'achievement';
+  | 'achievement'
+  | 'penalty';
 
 export interface XpEvent {
   id: string;
@@ -219,6 +220,10 @@ export interface XpRules {
 export interface Settings {
   playerName: string;
   gamification: boolean;
+  /** Missed quests cost XP (Solo Leveling penalties). */
+  penalties: boolean;
+  /** Penalties are only judged from this day on, never retroactively. */
+  penaltiesSince: DayKey;
   reducedMotion: 'system' | 'on' | 'off';
   /** Spaced-repetition ladder in days. */
   intervals: number[];

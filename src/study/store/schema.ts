@@ -1,7 +1,7 @@
 import type { AppState, Goal, SubItem } from '../domain/types';
 import { DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } from '../domain/defaults';
 import { emptyNutrition } from '../domain/nutrition';
-import { isDayKey } from '../lib/date';
+import { isDayKey, toDayKey } from '../lib/date';
 
 /** Validation + migration for persisted and imported data. */
 
@@ -39,6 +39,8 @@ export function migrate(raw: unknown): AppState {
     xp: { ...DEFAULT_SETTINGS.xp, ...(isObj(settingsIn.xp) ? settingsIn.xp : {}) },
     targets: { ...DEFAULT_SETTINGS.targets, ...(isObj(settingsIn.targets) ? settingsIn.targets : {}) },
     targetDate: isDayKey(settingsIn.targetDate) ? settingsIn.targetDate : DEFAULT_SETTINGS.targetDate,
+    // Penalties arrived later: an existing journey is judged only from the day it first loads with them.
+    penaltiesSince: isDayKey(settingsIn.penaltiesSince) ? settingsIn.penaltiesSince : toDayKey(new Date()),
   };
   // v2 → v3: the 3h study-time default briefly shipped; 2h is the intended daily minimum.
   if (version < 3 && settings.targets.minutesPerDay === 180) settings.targets = { ...settings.targets, minutesPerDay: DEFAULT_SETTINGS.targets.minutesPerDay };

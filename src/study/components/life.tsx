@@ -52,6 +52,16 @@ export function LifeStrip() {
         <span className="num font-semibold">{life.streak}</span>
         <span className="text-xs text-ink-muted">day streak</span>
       </div>
+      {life.zone && !life.zone.survived && (
+        <button
+          type="button"
+          onClick={() => navigate('life')}
+          className="num rounded-lg border border-rose/60 bg-rose/10 px-3 py-2 text-xs font-semibold tracking-[0.08em] text-rose"
+          title={`Clear today to recover +${life.zone.recover} XP`}
+        >
+          PENALTY ZONE −{life.zone.lost}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => navigate('life')}
@@ -75,6 +85,9 @@ interface Seen {
   achievements: string[];
   level: number;
   quests: string[];
+  /** Penalty days already announced, and days whose Penalty Zone was survived. */
+  penalties?: string[];
+  survived?: string[];
 }
 
 function readSeen(): Seen | null {
@@ -111,14 +124,24 @@ export function LifeWatcher() {
     const uid = user?.uid ?? 'local';
     const earned = life.achievements.filter((a) => a.earned).map((a) => a.def.id);
     const quests = life.recent.filter((q) => q.cleared).map((q) => q.day);
-    const key = `${uid}|${earned.join(',')}|${life.level.level}|${quests[0] ?? ''}`;
+    const penalties = life.penalties.map((p) => p.day);
+    const survived = life.penalties.filter((p) => p.recovered > 0).map((p) => p.day);
+    const key = `${uid}|${earned.join(',')}|${life.level.level}|${quests[0] ?? ''}|${penalties[0] ?? ''}|${survived[0] ?? ''}`;
     if (key === last.current) return;
     last.current = key;
 
     const seen = readSeen();
     if (!seen || seen.uid !== uid) {
-      writeSeen({ uid, achievements: earned, level: life.level.level, quests });
+      writeSeen({ uid, achievements: earned, level: life.level.level, quests, penalties, survived });
       return;
+    }
+    if (state.settings.gamification) {
+      for (const p of life.penalties) {
+        if (!(seen.penalties ?? []).includes(p.day)) {
+          toast({ tone: 'error', title: `[SYSTEM] Penalty: −${p.lost} Life XP`, detail: `The Daily Quest wasn't cleared. Clear today to recover +${Math.round(p.lost / 2)}.` });
+        }
+        if (p.recovered > 0 && !(seen.survived ?? []).includes(p.day)) toast({ tone: 'level', title: '[SYSTEM] Penalty Zone survived', detail: `+${p.recovered} Life XP recovered.` });
+      }
     }
     if (state.settings.gamification) {
       for (const a of life.achievements) {
@@ -134,6 +157,8 @@ export function LifeWatcher() {
       achievements: [...new Set([...seen.achievements, ...earned])],
       level: Math.max(seen.level, life.level.level),
       quests: [...new Set([...quests, ...seen.quests])].slice(0, 60),
+      penalties: [...new Set([...penalties, ...(seen.penalties ?? [])])].slice(0, 60),
+      survived: [...new Set([...survived, ...(seen.survived ?? [])])].slice(0, 60),
     });
   }, [ready, life, user, state.settings.gamification, toast]);
 

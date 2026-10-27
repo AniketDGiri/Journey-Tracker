@@ -4,8 +4,10 @@ import { PHASES } from '../domain/fitness';
 import { addDays, diffDays } from '../lib/date';
 import { dayTotals, getDay } from './nutrition';
 import { phaseProgress, weekDone } from './fitness';
-import { levelInfo, type LevelInfo } from './progression';
+import { levelInfo, totalXpForLevel, type LevelInfo } from './progression';
+import { escalation, REDEEM_SHARE } from './penalties';
 import { rankOf, rewardOf, type PersonalTask, type Rank } from './sidequests';
+import { dueDay } from '../../utils/taskDates';
 
 /**
  * The Life System: Solo Leveling-style progression for training, nutrition and
@@ -45,7 +47,47 @@ export const LIFE_XP = {
   questCleared: 30,
   questPerfect: 30,
   achievement: 25,
+  /** Lost per objective short of clearing a day's quest (before escalation). */
+  penalty: 15,
 } as const;
+
+// ── Penalties ────────────────────────────────────────────────────────────
+
+export interface LifePenalty {
+  day: DayKey;
+  /** Objectives short of the clear line. */
+  short: number;
+  multiplier: number;
+  lost: number;
+  /** Won back by clearing the next day (the Penalty Zone). */
+  recovered: number;
+}
+
+/**
+ * Days that ended without the Daily Quest cleared, judged only from `penaltiesSince`.
+ * Repeats escalate (×1.5, ×2) and clearing the next day wins half back.
+ */
+function lifePenalties(state: AppState, quests: DayQuest[], today: DayKey): LifePenalty[] {
+  const since = state.settings.penaltiesSince;
+  if (!state.settings.penalties || !since) return [];
+  const from = since > addDays(today, -60) ? since : addDays(today, -60);
+  const out: LifePenalty[] = [];
+  let consecutive = 0;
+  quests.forEach((q, i) => {
+    if (q.day < from || q.day >= today) return;
+    if (q.cleared) {
+      consecutive = 0;
+      return;
+    }
+    consecutive++;
+    const multiplier = escalation(consecutive);
+    const short = CLEAR_AT - q.done;
+    const lost = Math.round(LIFE_XP.penalty * short * multiplier);
+    const next = quests[i + 1];
+    out.push({ day: q.day, short, multiplier, lost, recovered: next?.cleared ? Math.round(lost * REDEEM_SHARE) : 0 });
+  });
+  return out;
+}
 
 // ── Daily Quest ──────────────────────────────────────────────────────────
 
@@ -68,17 +110,19 @@ export interface DayQuest {
   perfect: boolean;
 }
 
-export const CLEAR_AT = 4;
+/** Lenient on purpose: 3 objectives keep the streak alive, the rest are for a perfect day. */
+export const CLEAR_AT = 3;
 
 /** The day's Daily Quest, judged from what was logged on that day. */
-export function dailyQuest(state: AppState, tasks: PersonalTask[], day: DayKey, today: DayKey): DayQuest {
+export function dailyQuest(state: AppState, tasks: PersonalTask[], day: DayKey): DayQuest {
   const trained = state.fitness.logs.some((l) => l.date === day);
   const restDay = !trained && state.fitness.logs.some((l) => l.date === addDays(day, -1));
   const t = dayTotals(state, day);
   const d = getDay(state, day);
   const habitsDone = HABITS.filter((h) => d.habits[h.id]).length;
   const cleared = tasks.filter((x) => x.section === 'done' && x.doneAt === day).length;
-  const openNow = tasks.some((x) => x.section !== 'done');
+  // The side quest only joins the day when a personal task is due then (or one was cleared anyway).
+  const hasSideQuest = cleared > 0 || tasks.some((x) => dueDay(x) === day);
   const meals = NUTRITION_PLAN.meals.length;
 
   const objectives: Objective[] = [
@@ -92,14 +136,15 @@ export function dailyQuest(state: AppState, tasks: PersonalTask[], day: DayKey, 
     { id: 'budget', label: 'Stay within your calorie budget', detail: t.logged ? `${t.cal} / ${state.nutrition.calorieBudget} kcal` : 'Log food to check', done: t.withinBudget },
     { id: 'protein', label: 'Hit your protein goal', detail: `${t.protein} / ${state.nutrition.proteinGoal} g`, done: t.proteinHit },
     { id: 'habits', label: 'Sleep, water, fruit & veg, salad', detail: `${habitsDone} / ${HABITS.length} habits`, done: habitsDone === HABITS.length },
-    {
+  ];
+  if (hasSideQuest) {
+    objectives.push({
       id: 'side',
       label: 'Clear a side quest',
-      detail: cleared ? `${cleared} cleared` : openNow ? 'Finish any personal task' : 'Quest log empty: nothing to clear',
-      // An empty quest log is not held against today; past days can't be checked, so they need a real clear.
-      done: cleared > 0 || (!openNow && day === today),
-    },
-  ];
+      detail: cleared ? `${cleared} cleared` : 'Finish any personal task due today',
+      done: cleared > 0,
+    });
+  }
   const done = objectives.filter((o) => o.done).length;
   return { day, objectives, done, total: objectives.length, cleared: done >= CLEAR_AT, perfect: done === objectives.length };
 }
@@ -117,6 +162,10 @@ export interface LifeSummary {
   rank: (typeof LIFE_RANKS)[number];
   nextRank?: (typeof LIFE_RANKS)[number];
   sources: XpSource[];
+  /** Newest first. */
+  penalties: LifePenalty[];
+  zone: { day: DayKey; lost: number; recover: number; survived: boolean } | null;
+  atStake: { short: number; xp: number; multiplier: number } | null;
   today: DayQuest;
   /** Most recent days first, today included. */
   recent: DayQuest[];
@@ -143,7 +192,7 @@ function firstDay(state: AppState, tasks: PersonalTask[], today: DayKey): DayKey
 export function lifeSummary(state: AppState, tasks: PersonalTask[], today: DayKey): LifeSummary {
   const start = firstDay(state, tasks, today);
   const quests: DayQuest[] = [];
-  for (let d = start; d <= today; d = addDays(d, 1)) quests.push(dailyQuest(state, tasks, d, today));
+  for (let d = start; d <= today; d = addDays(d, 1)) quests.push(dailyQuest(state, tasks, d));
 
   // Streak: consecutive cleared days; today still counts as pending until it ends.
   let streak = 0;
@@ -180,22 +229,45 @@ export function lifeSummary(state: AppState, tasks: PersonalTask[], today: DayKe
   const achievements = evaluateLifeAchievements({ state, tasks, today, quests, streak, best });
   const achievementXp = achievements.filter((a) => a.earned).reduce((n, a) => n + LIFE_XP.achievement * (a.def.reward ?? 1), 0);
 
-  const sources: XpSource[] = [
+  const earnedSources: XpSource[] = [
     { label: 'Training', xp: workoutXp },
     { label: 'Nutrition', xp: nutritionXp },
     { label: 'Side quests', xp: sideXp },
     { label: 'Daily Quests', xp: questXp },
     { label: 'Achievements', xp: achievementXp },
   ];
-  const xp = sources.reduce((n, s) => n + s.xp, 0);
+  const gross = earnedSources.reduce((n, s) => n + s.xp, 0);
+
+  const penalties = lifePenalties(state, quests, today);
+  const lost = penalties.reduce((n, p) => n + p.lost, 0);
+  const recovered = penalties.reduce((n, p) => n + p.recovered, 0);
+  // Rank is earned for good: it comes from XP before penalties, and penalties can't take you below its floor.
+  const rank = lifeRank(levelInfo(gross).level);
+  const xp = Math.max(gross - lost + recovered, totalXpForLevel(rank.minLevel));
   const level = levelInfo(xp);
-  const rank = lifeRank(level.level);
+  const sources: XpSource[] = [...earnedSources, ...(penalties.length ? [{ label: 'Penalties', xp: -(lost - recovered) }] : [])];
+
+  // Penalty Zone: yesterday failed; clearing today wins half back.
+  const yesterday = penalties.find((p) => p.day === addDays(today, -1));
+  const zone = yesterday ? { day: yesterday.day, lost: yesterday.lost, recover: Math.round(yesterday.lost * REDEEM_SHARE), survived: quests[quests.length - 1].cleared } : null;
+  // What ending today uncleared would cost, given the current run of failed days.
+  const todayQ = quests[quests.length - 1];
+  let failRun = 1;
+  for (let d = addDays(today, -1); penalties.some((p) => p.day === d); d = addDays(d, -1)) failRun++;
+  const atStake =
+    state.settings.penalties && state.settings.penaltiesSince && today >= state.settings.penaltiesSince && !todayQ.cleared
+      ? { short: CLEAR_AT - todayQ.done, xp: Math.round(LIFE_XP.penalty * (CLEAR_AT - todayQ.done) * escalation(failRun)), multiplier: escalation(failRun) }
+      : null;
+
   return {
     xp,
     level,
     rank,
     nextRank: LIFE_RANKS.find((r) => r.minLevel > level.level),
     sources,
+    penalties: [...penalties].reverse(),
+    zone,
+    atStake,
     today: quests[quests.length - 1],
     recent: [...quests].reverse(),
     streak,

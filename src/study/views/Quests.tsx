@@ -13,7 +13,8 @@ import { Badge, Bar, Button, Panel, Ring, Segmented } from '../components/ui';
 import { QuestList } from '../components/progress';
 import { Planner } from '../components/planner';
 import { DomainTag } from '../components/bits';
-import { SystemTag, SystemWindow } from '../components/system';
+import { PenaltyZone, SystemTag, SystemWindow } from '../components/system';
+import { atStakeToday, penaltiesActive, penaltyLog, penaltyZone, type PenaltyEntry } from '../engine/penalties';
 
 type Tab = 'daily' | 'weekly' | 'monthly' | 'planner' | 'bosses' | 'achievements';
 
@@ -200,6 +201,9 @@ function DailyTab() {
   const chosen = useMemo(() => dailyQuests(state, day), [state, day]);
   const picked = new Set(chosen.map((q) => q.id));
   const hasPlan = !!state.questPlan?.[day];
+  const zone = useMemo(() => penaltyZone(state, today), [state, today]);
+  const stake = useMemo(() => atStakeToday(state, today), [state, today]);
+  const log = useMemo(() => penaltyLog(state, 15), [state]);
   const history = useMemo(
     () =>
       Array.from({ length: 14 }, (_, i) => addDays(today, i - 13)).map((d) => {
@@ -241,6 +245,15 @@ function DailyTab() {
 
   return (
     <div className="flex flex-col gap-5">
+      {zone && (
+        <PenaltyZone
+          lost={zone.lost}
+          recover={zone.recover}
+          survived={zone.survived}
+          missed={`You left ${zone.missed} daily quest${zone.missed === 1 ? '' : 's'} unfinished yesterday.`}
+          what="complete every daily quest"
+        />
+      )}
       {planning ? (
         <SystemWindow label="Choose daily quests">
           <SystemTag>DAILY QUEST · {formatDay(day, today).toUpperCase()}</SystemTag>
@@ -292,6 +305,12 @@ function DailyTab() {
           footer={
             <>
               <StatusLine quests={chosen} period="day" />
+              {day === today && stake && stake.missed > 0 && (
+                <span className="text-rose">
+                  Unfinished at midnight: <span className="num font-semibold">−{stake.xp} XP</span>
+                  {stake.multiplier > 1 && ` (×${stake.multiplier} repeat)`}
+                </span>
+              )}
               {state.settings.gamification && (
                 <span className="ml-auto text-ink-muted">
                   <span className="num text-violet-soft">+{state.settings.xp.dailyQuest} XP</span> each
@@ -302,7 +321,37 @@ function DailyTab() {
         />
       )}
       <HistoryStrip title="Last 14 days" cells={history} note="Days count the quests you chose for them." />
+      {(log.length > 0 || penaltiesActive(state)) && <PenaltyLog entries={log} />}
     </div>
+  );
+}
+
+/** Every penalty and recovery, so a missed day stays visible instead of quietly forgotten. */
+function PenaltyLog({ entries }: { entries: PenaltyEntry[] }) {
+  const { today } = useStore();
+  return (
+    <Panel title="Penalty log">
+      {entries.length ? (
+        <ul className="flex flex-col divide-y divide-line/60">
+          {entries.map((e) => (
+            <li key={e.id} className="flex items-center gap-3 py-2 text-xs">
+              <span className={cn('num w-12 shrink-0 font-semibold', e.amount < 0 ? 'text-rose' : e.amount > 0 ? 'text-jade' : 'text-ink-muted')}>
+                {e.amount > 0 ? `+${e.amount}` : e.amount === 0 ? '0' : e.amount}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-ink-soft" title={e.reason}>
+                {e.reason}
+              </span>
+              <span className="shrink-0 text-ink-faint">{formatDay(e.date, today)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-ink-muted">No penalties. Keep it that way.</p>
+      )}
+      <p className="mt-3 text-[11px] text-ink-muted">
+        A missed daily quest costs its reward; repeats cost ×1.5, then ×2. Clear every quest the next day to win half back. Rest days and shield days are exempt, and your rank is never lost.
+      </p>
+    </Panel>
   );
 }
 
@@ -331,6 +380,11 @@ function WeeklyTab() {
         footer={
           <>
             <StatusLine quests={weekly} period="week" />
+            {penaltiesActive(state) && doneOf(weekly) * 2 < weekly.length && (
+              <span className="text-rose">
+                Under half by Sunday: <span className="num font-semibold">−{Math.round(state.settings.xp.weeklyChallenge * 0.5)} XP</span>
+              </span>
+            )}
             {state.settings.gamification && (
               <span className="ml-auto text-ink-muted">
                 <span className="num text-violet-soft">+{state.settings.xp.weeklyChallenge} XP</span> each
@@ -370,6 +424,11 @@ function MonthlyTab() {
         footer={
           <>
             <StatusLine quests={monthly} period="month" />
+            {penaltiesActive(state) && doneOf(monthly) * 2 < monthly.length && (
+              <span className="text-rose">
+                Under half by month end: <span className="num font-semibold">−{Math.round(state.settings.xp.monthlyChallenge * 0.5)} XP</span>
+              </span>
+            )}
             {state.settings.gamification && (
               <span className="ml-auto text-ink-muted">
                 <span className="num text-violet-soft">+{state.settings.xp.monthlyChallenge} XP</span> each
@@ -572,6 +631,7 @@ export function Quests() {
   const daily = useMemo(() => dailyQuests(state, today), [state, today]);
   const weekly = useMemo(() => weeklyChallenges(state, today), [state, today]);
   const monthly = useMemo(() => monthlyChallenges(state, today), [state, today]);
+  const zone = useMemo(() => penaltyZone(state, today), [state, today]);
 
   const planner = (
     <Panel title="Planner — what you committed to and what you achieved" id="planner">
@@ -602,6 +662,12 @@ export function Quests() {
           </div>
         </div>
         <dl className="ml-auto flex flex-wrap gap-x-8 gap-y-3">
+          {zone && !zone.survived && (
+            <div>
+              <dt className="st-label text-rose">Penalty zone</dt>
+              <dd className="num mt-1 text-xl font-semibold text-rose">−{zone.lost}</dd>
+            </div>
+          )}
           <div>
             <dt className="st-label">Streak</dt>
             <dd className="num mt-1 flex items-center gap-1 text-xl font-semibold">

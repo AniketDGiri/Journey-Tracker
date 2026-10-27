@@ -123,6 +123,8 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
         }
         if (g && feedback.levelUp) toast({ tone: 'level', title: `Level ${feedback.levelUp}`, detail: feedback.rankUp ? `Rank up — you are now ${feedback.rankUp}.` : 'Your foundations are getting stronger.' });
         if (g) for (const a of feedback.achievements) toast({ tone: 'level', title: 'Achievement unlocked', detail: a });
+        // System notices (penalties, Penalty Zone recoveries) show even on silent actions.
+        if (g) for (const m of feedback.messages) toast({ tone: m.includes('survived') ? 'level' : 'error', title: m });
         return feedback;
       } catch (e) {
         if (e instanceof ActionError) toast({ tone: 'error', title: e.message });
@@ -135,6 +137,11 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
     },
     [ctx, persist, toast],
   );
+
+  // Judge finished days on load and at midnight, not only on the next action.
+  useEffect(() => {
+    if (status === 'ready') act((s) => s, { silent: true });
+  }, [status, today, act]);
 
   const replace = useCallback(
     (s: AppState, message?: string) => {
@@ -151,7 +158,8 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
   const startSample = useCallback(() => replace(buildSampleState(new Date()), 'Sample data loaded'), [replace]);
   const startFresh = useCallback(() => {
     const settings = stateRef.current.settings;
-    replace({ ...createEmptyState(new Date()), onboarded: true, settings }, 'Fresh start. Your journey begins today.');
+    // A fresh start also restarts the penalty clock: nothing before today is judged.
+    replace({ ...createEmptyState(new Date()), onboarded: true, settings: { ...settings, penaltiesSince: toDayKey(new Date()) } }, 'Fresh start. Your journey begins today.');
   }, [replace]);
 
   const derived = useMemo<Derived>(

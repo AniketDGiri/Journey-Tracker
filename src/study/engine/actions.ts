@@ -27,6 +27,7 @@ import { rubricRatio } from './mastery';
 import { computeStreak } from './streak';
 import { ACHIEVEMENTS, evaluateAchievements } from './achievements';
 import { BOSSES, bossReward, bossScore } from './bosses';
+import { syncPenalties } from './penalties';
 import type { Quest } from './quests';
 import { periodStart } from './plan';
 
@@ -546,7 +547,11 @@ export function updateSettings(state: AppState, patch: Partial<Settings>): AppSt
 export function run(state: AppState, fn: (s: AppState) => AppState, ctx: Ctx): { state: AppState; feedback: Feedback } {
   const before = levelInfo(totalXp(state));
   const mid = fn(state);
-  const { state: next, earned } = mid === state ? { state: mid, earned: [] } : syncAchievements(mid, ctx);
+  const synced = mid === state ? { state: mid, earned: [] } : syncAchievements(mid, ctx);
+  // Finished days are judged here too, so penalties and Penalty Zone recoveries land as soon as they're due.
+  const judged = syncPenalties(synced.state, ctx);
+  const next = judged.state;
+  const earned = synced.earned;
   const after = levelInfo(totalXp(next));
   return {
     state: next,
@@ -555,7 +560,7 @@ export function run(state: AppState, fn: (s: AppState) => AppState, ctx: Ctx): {
       levelUp: after.level > before.level ? after.level : undefined,
       rankUp: after.rank.name !== before.rank.name ? after.rank.name : undefined,
       achievements: earned,
-      messages: [],
+      messages: judged.messages,
     },
   };
 }

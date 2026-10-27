@@ -7,6 +7,7 @@ import { updateSettings, validateIntervals } from '../engine/actions';
 import { migrate, toExport } from '../store/schema';
 import { Button, Field, Panel, Segmented, Toggle } from '../components/ui';
 import { cn } from '../lib/cn';
+import { toDayKey } from '../lib/date';
 
 const XP_FIELDS: [keyof XpRules, string][] = [
   ['solveEasy', 'Easy problem'],
@@ -88,6 +89,15 @@ export function Settings() {
             onChange={(v) => set({ gamification: v }, v ? 'Gamification on' : 'Gamification off — tracking and revision still work')}
             label="Gamification layer"
             description="XP, ranks, quests, bosses and achievements. Turn off for a pure tracker; nothing is lost."
+          />
+          <Toggle
+            checked={s.penalties}
+            onChange={(v) =>
+              // Switching on starts the clock today, so the gap while it was off is never charged.
+              set(v ? { penalties: true, penaltiesSince: toDayKey(new Date()) } : { penalties: false }, v ? 'Penalties on from today' : 'Penalties off — nothing more will be charged')
+            }
+            label="Penalties"
+            description="Missed daily quests cost XP, repeats cost more, and clearing the next day wins half back (the Penalty Zone). Applies to study quests and the Life Daily Quest. Your rank is never lost."
           />
           <Field label="Motion">
             <Segmented

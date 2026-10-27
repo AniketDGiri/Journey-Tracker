@@ -8,7 +8,7 @@ import { totalXpForLevel } from '../engine/progression';
 import { formatDay, shortWeekday } from '../lib/date';
 import { cn } from '../lib/cn';
 import { Badge, Bar, Button, Panel, Ring } from '../components/ui';
-import { SystemWindow } from '../components/system';
+import { PenaltyZone, SystemWindow } from '../components/system';
 
 /** Where each objective is done, so the quest can send you straight there. */
 const OBJECTIVE_ROUTE: Record<ObjectiveId, Route> = {
@@ -37,6 +37,16 @@ export function LifeSystem() {
       <p className="text-sm text-ink-muted">
         Training, nutrition and side quests level you up here. It is separate from interview-prep XP and rank, and worked out from what you log, so it can’t be gamed.
       </p>
+
+      {life.zone && (
+        <PenaltyZone
+          lost={life.zone.lost}
+          recover={life.zone.recover}
+          survived={life.zone.survived}
+          missed="Yesterday's Daily Quest was not cleared."
+          what={`clear ${CLEAR_AT} of ${q.total} objectives`}
+        />
+      )}
 
       <div className="grid gap-5 lg:grid-cols-12">
         <SystemWindow label="Daily Quest" className="lg:col-span-7">
@@ -83,6 +93,12 @@ export function LifeSystem() {
             ) : (
               <span className="flex items-center gap-1.5 text-ember-soft">
                 <TriangleAlert size={13} aria-hidden="true" /> {CLEAR_AT - q.done} more to clear today, or the streak resets.
+              </span>
+            )}
+            {life.atStake && (
+              <span className="text-rose">
+                Uncleared at midnight: <span className="num font-semibold">−{life.atStake.xp} XP</span>
+                {life.atStake.multiplier > 1 && ` (×${life.atStake.multiplier} repeat)`}
               </span>
             )}
             {game && (
@@ -136,14 +152,45 @@ export function LifeSystem() {
           <ul className="flex flex-col gap-2">
             {life.sources.map((s) => (
               <li key={s.label} className="flex items-center gap-3 text-sm">
-                <span className="w-28 shrink-0 text-ink-soft">{s.label}</span>
-                <Bar value={life.xp ? s.xp / life.xp : 0} tone="arc" label={`${s.label} XP share`} />
-                <span className="num w-14 text-right text-xs">{s.xp.toLocaleString()}</span>
+                <span className={cn('w-28 shrink-0', s.xp < 0 ? 'text-rose' : 'text-ink-soft')}>{s.label}</span>
+                {s.xp < 0 ? (
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
+                    <span className="block h-full rounded-full bg-rose" style={{ width: `${Math.min(100, (-s.xp / Math.max(1, life.xp - s.xp)) * 100)}%` }} />
+                  </span>
+                ) : (
+                  <Bar value={life.xp ? s.xp / life.xp : 0} tone="arc" label={`${s.label} XP share`} />
+                )}
+                <span className={cn('num w-14 text-right text-xs', s.xp < 0 && 'text-rose')}>{s.xp.toLocaleString()}</span>
               </li>
             ))}
           </ul>
+          {life.penalties.length > 0 && <p className="mt-2 text-[11px] text-ink-muted">Rank is kept for good: penalties can lower your level, never your rank.</p>}
         </SystemWindow>
       </div>
+
+      {(life.penalties.length > 0 || state.settings.penalties) && (
+        <Panel title="Penalty log">
+          {life.penalties.length ? (
+            <ul className="flex flex-col divide-y divide-line/60">
+              {life.penalties.slice(0, 10).map((p) => (
+                <li key={p.day} className="flex items-center gap-3 py-2 text-xs">
+                  <span className="num w-12 shrink-0 font-semibold text-rose">−{p.lost}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-soft">
+                    Daily Quest not cleared · {p.short} objective{p.short > 1 ? 's' : ''} short{p.multiplier > 1 ? ` · ×${p.multiplier} repeat` : ''}
+                  </span>
+                  {p.recovered > 0 && <span className="num shrink-0 text-jade">+{p.recovered} recovered</span>}
+                  <span className="w-20 shrink-0 text-right text-ink-faint">{formatDay(p.day, today)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-ink-muted">No penalties. Keep it that way.</p>
+          )}
+          <p className="mt-3 text-[11px] text-ink-muted">
+            An uncleared day costs {LIFE_XP.penalty} XP per objective short of {CLEAR_AT}; repeats cost ×1.5, then ×2. Clear the next day to win half back. Turn penalties off in Settings.
+          </p>
+        </Panel>
+      )}
 
       <Panel title="Last 14 days">
         <ol className="grid grid-cols-7 gap-1.5 sm:grid-cols-[repeat(14,minmax(0,1fr))]" aria-label="Daily Quest results for the last 14 days">
