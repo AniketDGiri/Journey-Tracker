@@ -7,8 +7,9 @@ import { toDayKey } from '../lib/date';
  * 2: DSA and HLD starter items removed from real journeys; items may carry sub-items.
  * 3: daily study-time goal default moved from 3h to 2h.
  * 4: planner goals, training phases (fitness) and nutrition tracking.
+ * 5: the Java track (topics + syllabus) added to DSA.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const emptyFitness = (): AppState['fitness'] => ({ activePhaseId: 'phase-0', starts: {}, logs: [] });
 
@@ -37,7 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
     mission: 40,
     achievement: 25,
   },
-  targets: { dsaPerDay: 2, hldPerDay: 1, lldPerDay: 1, reviewsPerDay: 5, minutesPerDay: 120 },
+  targets: { dsaPerDay: 2, javaPerDay: 1, hldPerDay: 1, lldPerDay: 1, reviewsPerDay: 5, minutesPerDay: 120 },
   restDays: [],
   minSessionMinutes: 15,
   targetDate: '2027-03-31',

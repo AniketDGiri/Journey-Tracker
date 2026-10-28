@@ -37,7 +37,7 @@ const GROUPS: { id: Group; label: string }[] = [
 
 const NAV: { route: Route; label: string; icon: typeof LayoutGrid; group: Group }[] = [
   { route: 'quests', label: 'Quests', icon: Swords, group: 'study' },
-  { route: 'dsa', label: 'DSA', icon: Binary, group: 'study' },
+  { route: 'dsa', label: 'DSA & Java', icon: Binary, group: 'study' },
   { route: 'hld', label: 'System Design', icon: Network, group: 'study' },
   { route: 'lld', label: 'Low-Level Design', icon: Boxes, group: 'study' },
   { route: 'revision', label: 'Revision', icon: RotateCcw, group: 'study' },

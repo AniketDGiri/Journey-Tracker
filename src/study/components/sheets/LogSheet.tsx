@@ -11,7 +11,7 @@ import { ItemPicker } from '../ItemPicker';
 import { RubricEditor, StatusPicker, SubItemsEditor } from '../bits';
 
 const KINDS: Record<Domain, ItemKind[]> = {
-  dsa: ['problem'],
+  dsa: ['problem', 'concept'],
   hld: ['concept', 'design'],
   lld: ['concept', 'machine-coding'],
 };
@@ -76,6 +76,12 @@ export function LogSheet({
     if (mode === 'new') setStatus(list.length ? deriveStatus('not-started', list) : newDefault);
     else setStatus((s) => deriveStatus(s, list));
   };
+
+  // DSA holds problems; its Java track holds concepts. Follow the chosen topic.
+  useEffect(() => {
+    if (domain !== 'dsa') return;
+    setKind(state.topics.find((t) => t.id === topicId)?.track ? 'concept' : 'problem');
+  }, [domain, topicId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!domainTopics.some((t) => t.id === topicId)) setTopicId(domainTopics[0]?.id ?? '');
@@ -213,14 +219,27 @@ export function LogSheet({
               </p>
             )}
             <Field label="Title" htmlFor="log-title">
-              <input id="log-title" className="st-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={domain === 'dsa' ? 'e.g. Longest Palindromic Substring' : 'e.g. Consistent hashing'} autoFocus />
+              <input id="log-title" className="st-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={domain === 'dsa' ? (kind === 'concept' ? 'e.g. HashMap internals' : 'e.g. Longest Palindromic Substring') : 'e.g. Consistent hashing'} autoFocus />
             </Field>
             <Field label="Topic" htmlFor="log-topic">
               <select id="log-topic" className="st-input" value={topicId} onChange={(e) => setTopicId(e.target.value)}>
-                {domainTopics.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
+                {domainTopics
+                  .filter((t) => !t.track)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                {[...new Set(domainTopics.filter((t) => t.track).map((t) => t.track!))].map((track) => (
+                  <optgroup key={track} label={track === 'java' ? 'Java' : track}>
+                    {domainTopics
+                      .filter((t) => t.track === track)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                  </optgroup>
                 ))}
               </select>
             </Field>

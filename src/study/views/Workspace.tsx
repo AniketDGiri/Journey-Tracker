@@ -95,7 +95,7 @@ export function Workspace({ domain }: { domain: Domain }) {
             </button>
           </div>
         </div>
-        <dl className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-4 lg:px-6">
+        <dl className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fit,minmax(104px,1fr))] gap-4 lg:px-6">
           <div>
             <dt className="st-label">Learned</dt>
             <dd className="num mt-1 text-lg font-semibold">

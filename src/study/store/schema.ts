@@ -1,5 +1,6 @@
 import type { AppState, Goal, SubItem } from '../domain/types';
 import { DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } from '../domain/defaults';
+import { javaTrack } from '../domain/catalog';
 import { emptyNutrition } from '../domain/nutrition';
 import { isDayKey, toDayKey } from '../lib/date';
 
@@ -64,12 +65,22 @@ export function migrate(raw: unknown): AppState {
     );
   }
 
+  // v4 → v5: the Java track joins DSA. Added once; anything you already have is kept as is.
+  let topicList = topics as AppState['topics'];
+  if (version < 5) {
+    const java = javaTrack(new Date().toISOString());
+    const haveTopics = new Set(topicList.map((t) => t.id));
+    const haveItems = new Set(itemList.map((i) => i.id));
+    topicList = [...topicList, ...java.topics.filter((t) => !haveTopics.has(t.id))];
+    itemList = [...itemList, ...java.items.filter((i) => !haveItems.has(i.id))];
+  }
+
   return {
     schemaVersion: SCHEMA_VERSION,
     mode,
     onboarded: payload.onboarded !== false,
     createdAt: typeof payload.createdAt === 'string' ? payload.createdAt : new Date().toISOString(),
-    topics: topics as AppState['topics'],
+    topics: topicList,
     items: itemList,
     activity,
     xp: (Array.isArray(payload.xp) ? payload.xp : []) as AppState['xp'],

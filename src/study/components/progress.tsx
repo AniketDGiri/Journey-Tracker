@@ -273,64 +273,86 @@ export function Legend() {
 
 // ── Skill tree (workspace) ──────────────────────────────────────────────
 
+const TRACK_LABEL: Record<string, string> = { java: 'Java · from scratch' };
+
 export function SkillTree({ domain, selected, onSelect }: { domain: Domain; selected?: string; onSelect: (topicId: string | undefined) => void }) {
   const { derived, state } = useStore();
   const { open } = useUI();
-  const tiers = useMemo(() => {
+  // A domain can hold separate learning tracks (e.g. Java inside DSA): each gets its own section and tiers.
+  const sections = useMemo(() => {
     const list = [...derived.stats.values()].filter((s) => s.topic.domain === domain);
-    const m = new Map<number, TopicStats[]>();
-    for (const s of list) m.set(s.topic.tier, [...(m.get(s.topic.tier) ?? []), s]);
-    return [...m.entries()].sort((a, b) => a[0] - b[0]);
+    const byTrack = new Map<string, TopicStats[]>();
+    for (const s of list) byTrack.set(s.topic.track ?? '', [...(byTrack.get(s.topic.track ?? '') ?? []), s]);
+    return [...byTrack.entries()]
+      .sort((a, b) => (a[0] === '' ? 1 : 0) - (b[0] === '' ? 1 : 0))
+      .map(([track, items]) => {
+        const m = new Map<number, TopicStats[]>();
+        for (const s of items) m.set(s.topic.tier, [...(m.get(s.topic.tier) ?? []), s]);
+        return { track, tiers: [...m.entries()].sort((a, b) => a[0] - b[0]) };
+      });
   }, [derived.stats, domain]);
+  const multi = sections.length > 1;
   const nameOf = (id: string) => state.topics.find((t) => t.id === id)?.name ?? '';
 
   return (
-    <ol className="relative flex flex-col gap-5">
-      <span className="absolute bottom-3 left-[11px] top-3 w-px bg-gradient-to-b from-violet/50 via-line to-transparent" aria-hidden="true" />
-      {tiers.map(([tier, list]) => (
-        <li key={tier} className="relative pl-9">
-          <span className="num absolute left-0 top-1 grid h-6 w-6 place-items-center rounded-full border border-line-strong bg-surface text-[10px] text-ink-muted" aria-hidden="true">
-            {tier + 1}
-          </span>
-          <p className="st-label mb-2">Tier {tier + 1}</p>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {list.map((s) => {
-              const meta = TOPIC_STATE_META[s.state];
-              const active = selected === s.topic.id;
-              return (
-                <div key={s.topic.id} className={cn('group relative rounded-xl border bg-surface-2/50 transition-colors', meta.ring, active && 'bg-violet/10 ring-1 ring-violet-soft')}>
-                  <button
-                    onClick={() => onSelect(active ? undefined : s.topic.id)}
-                    aria-pressed={active}
-                    className="flex w-full flex-col gap-2 p-3 pr-9 text-left"
-                    aria-label={`${s.topic.name}, ${meta.label}, ${s.mastery}% mastery${s.blockers.length ? `, needs ${s.blockers.map((b) => b.name).join(' and ')}` : ''}. ${active ? 'Clear filter' : 'Filter items'}`}
-                  >
-                    <span className="flex items-center gap-2">
-                      {s.state === 'locked' ? <Lock size={12} className="text-ink-faint" aria-hidden="true" /> : <span className={cn('h-2 w-2 rounded-full', meta.dot)} aria-hidden="true" />}
-                      <span className={cn('truncate text-sm font-medium', meta.text)}>{s.topic.name}</span>
-                      <span className="num ml-auto text-xs text-ink-muted">{s.mastery}%</span>
-                    </span>
-                    <Bar value={s.mastery / 100} tone={s.state === 'mastered' ? 'arc' : s.state === 'locked' ? 'muted' : 'violet'} label={`${s.topic.name} mastery`} />
-                    <span className="text-[11px] text-ink-muted">
-                      {s.state === 'locked' && s.blockers.length
-                        ? `Unlocks at 40% in ${s.blockers.map((b) => b.name).join(', ')}`
-                        : `${s.solved}/${Math.max(s.items.length, s.topic.target)} learned${s.due ? ` · ${s.due} due` : ''}`}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => open({ type: 'topic', domain, topicId: s.topic.id })}
-                    className="absolute right-2 top-2 rounded-md p-1.5 text-ink-faint opacity-0 hover:bg-surface-3 hover:text-ink focus:opacity-100 group-hover:opacity-100"
-                    aria-label={`Edit topic ${s.topic.name}`}
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  {s.topic.prerequisites.length > 0 && s.state !== 'locked' && <span className="sr-only">Requires {s.topic.prerequisites.map(nameOf).join(', ')}</span>}
+    <div className="flex flex-col gap-8">
+      {sections.map(({ track, tiers }) => (
+        <section key={track || 'main'} aria-label={track ? TRACK_LABEL[track] ?? track : DOMAIN_META[domain].label}>
+          {multi && (
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <span className={cn('h-2 w-2 rotate-45 rounded-[2px]', track ? 'bg-ember' : 'bg-violet-soft')} aria-hidden="true" />
+              {track ? TRACK_LABEL[track] ?? track : DOMAIN_META[domain].label}
+            </h3>
+          )}
+          <ol className="relative flex flex-col gap-5">
+            <span className="absolute bottom-3 left-[11px] top-3 w-px bg-gradient-to-b from-violet/50 via-line to-transparent" aria-hidden="true" />
+            {tiers.map(([tier, list]) => (
+              <li key={tier} className="relative pl-9">
+                <span className="num absolute left-0 top-1 grid h-6 w-6 place-items-center rounded-full border border-line-strong bg-surface text-[10px] text-ink-muted" aria-hidden="true">
+                  {tier + 1}
+                </span>
+                <p className="st-label mb-2">Tier {tier + 1}</p>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {list.map((s) => {
+                    const meta = TOPIC_STATE_META[s.state];
+                    const active = selected === s.topic.id;
+                    return (
+                      <div key={s.topic.id} className={cn('group relative rounded-xl border bg-surface-2/50 transition-colors', meta.ring, active && 'bg-violet/10 ring-1 ring-violet-soft')}>
+                        <button
+                          onClick={() => onSelect(active ? undefined : s.topic.id)}
+                          aria-pressed={active}
+                          className="flex w-full flex-col gap-2 p-3 pr-9 text-left"
+                          aria-label={`${s.topic.name}, ${meta.label}, ${s.mastery}% mastery${s.blockers.length ? `, needs ${s.blockers.map((b) => b.name).join(' and ')}` : ''}. ${active ? 'Clear filter' : 'Filter items'}`}
+                        >
+                          <span className="flex items-center gap-2">
+                            {s.state === 'locked' ? <Lock size={12} className="text-ink-faint" aria-hidden="true" /> : <span className={cn('h-2 w-2 rounded-full', meta.dot)} aria-hidden="true" />}
+                            <span className={cn('truncate text-sm font-medium', meta.text)}>{s.topic.name}</span>
+                            <span className="num ml-auto text-xs text-ink-muted">{s.mastery}%</span>
+                          </span>
+                          <Bar value={s.mastery / 100} tone={s.state === 'mastered' ? 'arc' : s.state === 'locked' ? 'muted' : 'violet'} label={`${s.topic.name} mastery`} />
+                          <span className="text-[11px] text-ink-muted">
+                            {s.state === 'locked' && s.blockers.length
+                              ? `Unlocks at 40% in ${s.blockers.map((b) => b.name).join(', ')}`
+                              : `${s.solved}/${Math.max(s.items.length, s.topic.target)} learned${s.due ? ` · ${s.due} due` : ''}`}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => open({ type: 'topic', domain, topicId: s.topic.id })}
+                          className="absolute right-2 top-2 rounded-md p-1.5 text-ink-faint opacity-0 hover:bg-surface-3 hover:text-ink focus:opacity-100 group-hover:opacity-100"
+                          aria-label={`Edit topic ${s.topic.name}`}
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        {s.topic.prerequisites.length > 0 && s.state !== 'locked' && <span className="sr-only">Requires {s.topic.prerequisites.map(nameOf).join(', ')}</span>}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        </li>
+              </li>
+            ))}
+          </ol>
+        </section>
       ))}
-    </ol>
+    </div>
   );
 }

@@ -4,7 +4,7 @@ import { slug } from '../lib/id';
 /** Default curriculum. Topics + starter items (all "not started"). Not sample data. */
 
 export const DOMAIN_META: Record<Domain, { label: string; short: string; title: string; tagline: string }> = {
-  dsa: { label: 'DSA', short: 'DSA', title: 'Algorithmic Mastery', tagline: 'Patterns, problems and speed' },
+  dsa: { label: 'DSA', short: 'DSA', title: 'Algorithmic Mastery', tagline: 'Java, patterns, problems and speed' },
   hld: { label: 'System Design', short: 'HLD', title: 'System Design', tagline: 'Scale, trade-offs and clarity' },
   lld: { label: 'Low-Level Design', short: 'LLD', title: 'Low-Level Design', tagline: 'Objects, patterns and clean code' },
 };
@@ -148,6 +148,89 @@ const HLD_ITEMS: Record<string, [string, ItemKind, Difficulty?][]> = {
   'designs-3': [['Video Streaming Platform', 'design', 'hard'], ['Ride Sharing', 'design', 'hard'], ['Distributed Job Scheduler', 'design', 'hard'], ['Payment System', 'design', 'hard']],
 };
 
+/**
+ * Java, from scratch to interview-ready. Lives in the DSA workspace as its own
+ * track, chained only to itself so existing DSA topics never lock behind it.
+ */
+export const JAVA_TRACK = 'java';
+
+const JAVA_TOPICS: TopicSeed[] = [
+  ['java-basics', 'Java Basics', 0, [], 'Syntax, types, control flow, methods'],
+  ['java-oop', 'OOP in Java', 1, ['java-basics'], 'Classes, inheritance, interfaces'],
+  ['java-core', 'Core Java', 1, ['java-basics'], 'Exceptions, wrappers, enums, records'],
+  ['java-collections', 'Collections Framework', 2, ['java-oop'], 'List, Set, Map, Deque, PriorityQueue'],
+  ['java-generics', 'Generics', 2, ['java-oop'], 'Type parameters, wildcards, erasure'],
+  ['java-for-dsa', 'Java for DSA', 2, ['java-collections'], 'Picking structures, templates, pitfalls'],
+  ['java-functional', 'Functional Java', 3, ['java-collections', 'java-generics'], 'Lambdas, streams, Optional'],
+  ['java-jvm', 'JVM & Memory', 3, ['java-core'], 'Heap vs stack, GC, string pool'],
+  ['java-concurrency', 'Concurrency', 4, ['java-functional', 'java-jvm'], 'Threads, executors, concurrent collections'],
+];
+
+const JAVA_ITEMS: Record<string, string[]> = {
+  'java-basics': [
+    'JDK setup and your first program',
+    'Variables and primitive types',
+    'Operators and type casting',
+    'Control flow: if, switch, loops',
+    'Methods, parameters and return values',
+    'Arrays and 2D arrays',
+    'String and StringBuilder',
+    'Reading input and printing output',
+  ],
+  'java-oop': [
+    'Classes, objects and constructors',
+    'this, static and final',
+    'Inheritance and super',
+    'Method overriding and polymorphism',
+    'Abstract classes vs interfaces',
+    'Access modifiers and packages',
+    'equals, hashCode and toString',
+  ],
+  'java-core': [
+    'Exceptions: checked vs unchecked',
+    'try-catch-finally and try-with-resources',
+    'Wrapper classes and autoboxing',
+    'Enums',
+    'Records and immutability',
+  ],
+  'java-collections': [
+    'ArrayList vs LinkedList',
+    'HashSet, LinkedHashSet and TreeSet',
+    'HashMap, LinkedHashMap and TreeMap',
+    'How HashMap works internally',
+    'ArrayDeque as stack and queue',
+    'PriorityQueue',
+    'Comparable and Comparator',
+    'Iterators and ConcurrentModificationException',
+  ],
+  'java-generics': ['Generic classes and methods', 'Bounded types and wildcards', 'Type erasure'],
+  'java-for-dsa': [
+    'Choosing the right collection for a problem',
+    'Fast input/output for practice',
+    'Integer overflow, == vs equals and other pitfalls',
+    'Recursion depth and stack overflow',
+  ],
+  'java-functional': ['Lambdas and functional interfaces', 'Streams: map, filter, collect', 'Optional', 'Method references'],
+  'java-jvm': ['JDK, JRE and JVM', 'Stack vs heap memory', 'Garbage collection basics', 'String pool and immutability'],
+  'java-concurrency': [
+    'Threads and Runnable',
+    'synchronized, volatile and the memory model',
+    'ExecutorService and thread pools',
+    'ConcurrentHashMap and atomic variables',
+    'CompletableFuture',
+  ],
+};
+
+/** The Java track's topics and concept items, ready to add to any journey. */
+export function javaTrack(now: string): { topics: Topic[]; items: PracticeItem[] } {
+  const ts = topics('dsa', JAVA_TOPICS, (id) => Math.max(3, JAVA_ITEMS[id]?.length ?? 3)).map((t) => ({ ...t, track: JAVA_TRACK }));
+  const items: PracticeItem[] = [];
+  for (const [t, list] of Object.entries(JAVA_ITEMS)) {
+    for (const title of list) items.push(makeItem({ id: `dsa:java-${slug(title)}`, domain: 'dsa', topicId: `dsa-${t}`, kind: 'concept', title }, now));
+  }
+  return { topics: ts, items };
+}
+
 const LLD_TOPICS: TopicSeed[] = [
   ['oop', 'OOP Fundamentals', 0, [], 'Encapsulation, abstraction, polymorphism'],
   ['uml', 'UML & Relationships', 0, [], 'Class diagrams, associations, sequence diagrams'],
@@ -236,5 +319,7 @@ export function buildCatalog(now: string, starterDomains: Domain[] = ['dsa', 'hl
       }
     }
   }
-  return { topics: ts, items: items.filter((i) => starterDomains.includes(i.domain)) };
+  // The Java track always comes with its syllabus: it is learned from scratch, item by item.
+  const java = javaTrack(now);
+  return { topics: [...ts, ...java.topics], items: [...items.filter((i) => starterDomains.includes(i.domain)), ...java.items] };
 }

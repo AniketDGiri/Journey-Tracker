@@ -120,6 +120,7 @@ export function Settings() {
           {(
             [
               ['dsaPerDay', 'DSA problems / day'],
+    ['javaPerDay', 'Java concepts / day'],
               ['hldPerDay', 'HLD items / day'],
               ['lldPerDay', 'LLD items / day'],
               ['reviewsPerDay', 'Max revisions quest'],

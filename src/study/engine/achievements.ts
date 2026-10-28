@@ -30,7 +30,7 @@ export interface AchievementCtx {
 
 const learned = (s: AppState) => s.items.filter(isLearned);
 const solvedIn = (s: AppState, topicId?: string) =>
-  s.items.filter((i) => i.domain === 'dsa' && isLearned(i) && (!topicId || i.topicId === topicId)).length;
+  s.items.filter((i) => i.domain === 'dsa' && i.kind === 'problem' && isLearned(i) && (!topicId || i.topicId === topicId)).length;
 
 const stepsDone = (s: AppState) => s.items.reduce((n, i) => n + (i.subItems ?? []).filter((x) => x.done).length, 0);
 

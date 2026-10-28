@@ -2,6 +2,7 @@ import type { ActivityEvent, AppState, DayKey, Domain } from '../domain/types';
 import { addDays, diffDays, endOfMonth, startOfMonth, startOfWeek } from '../lib/date';
 import { grantedFor } from './progression';
 import { evaluateGoals } from './plan';
+import { JAVA_TRACK } from '../domain/catalog';
 import { isLearned } from './revision';
 import type { TopicStats } from './mastery';
 import { MASTERED_TOPIC, UNLOCK_THRESHOLD } from './mastery';
@@ -78,6 +79,24 @@ export function availableDailyQuests(state: AppState, today: DayKey): Quest[] {
         progress: solved,
         target: t.dsaPerDay,
         action: { type: 'log', domain: 'dsa' },
+      }),
+    );
+  }
+  const javaTopics = new Set(state.topics.filter((x) => x.track === JAVA_TRACK).map((x) => x.id));
+  if ((t.javaPerDay ?? 0) > 0 && javaTopics.size) {
+    const n = distinct(
+      todays.filter((a) => a.topicId && javaTopics.has(a.topicId) && PRACTICE_TYPES.has(a.type)),
+      (e) => e.itemId,
+    );
+    quests.push(
+      mk({
+        id: 'daily-java',
+        domain: 'dsa',
+        title: `Study ${t.javaPerDay} Java concept${t.javaPerDay > 1 ? 's' : ''}`,
+        detail: 'Learn it, write a small program with it, log the outcome.',
+        progress: n,
+        target: t.javaPerDay,
+        action: { type: 'navigate', to: 'dsa' },
       }),
     );
   }

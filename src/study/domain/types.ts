@@ -53,6 +53,8 @@ export interface Topic {
   target: number;
   description?: string;
   custom?: boolean;
+  /** A separate learning track inside a domain (e.g. 'java' in DSA), shown as its own section. */
+  track?: string;
 }
 
 /** A checklist step inside an item. Ticking all of them completes the item. */
@@ -230,6 +232,7 @@ export interface Settings {
   xp: XpRules;
   targets: {
     dsaPerDay: number;
+    javaPerDay: number;
     hldPerDay: number;
     lldPerDay: number;
     reviewsPerDay: number;
