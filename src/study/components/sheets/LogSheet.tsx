@@ -22,11 +22,14 @@ export function LogSheet({
   itemId: initialItem,
   mode: initialMode,
   topicId: initialTopic,
+  date: initialDate,
 }: {
   domain?: Domain;
   itemId?: string;
   mode?: 'new' | 'existing';
   topicId?: string;
+  /** The day the work was done; defaults to today. */
+  date?: string;
 }) {
   const { state, act, today } = useStore();
   const { close } = useUI();
@@ -56,6 +59,9 @@ export function LogSheet({
   const [minutes, setMinutes] = useState('');
   const [rubric, setRubric] = useState<Record<string, boolean>>(preset?.rubric ?? {});
   const [subItems, setSubItemList] = useState<SubItem[]>(preset?.subItems ?? []);
+
+  // The day the work happened: lets a forgotten log still count for that day's quests.
+  const [doneOn, setDoneOn] = useState(initialDate && initialDate < today ? initialDate : today);
 
   // Revising: an item studied earlier but never recorded, being revised now.
   const [revising, setRevising] = useState(false);
@@ -120,21 +126,24 @@ export function LogSheet({
       (s, ctx) => {
         let id = itemId!;
         let next = s;
-        // A revised item's first study is recorded on the day it actually happened (never in the future).
-        const first: Ctx = isRevising && learned && studiedOn && studiedOn < ctx.today ? { today: studiedOn, now: new Date(`${studiedOn}T12:00:00`).toISOString() } : ctx;
+        const on = (day: string): Ctx => ({ today: day, now: new Date(`${day}T12:00:00`).toISOString() });
+        // Work done on an earlier day is recorded on that day (never in the future).
+        const done: Ctx = !isRevising && doneOn && doneOn < ctx.today ? on(doneOn) : ctx;
+        // A revised item's first study is recorded on the day it actually happened.
+        const first: Ctx = isRevising && learned && studiedOn && studiedOn < ctx.today ? on(studiedOn) : done;
         if (mode === 'new') {
           const r = addItem(next, { topicId, kind, title, difficulty: kind === 'problem' || kind === 'design' || kind === 'machine-coding' ? difficulty : undefined, url, subItems }, first);
           next = r.state;
           id = r.id;
         } else {
-          next = setSubItems(next, id, subItems, ctx);
+          next = setSubItems(next, id, subItems, done);
         }
         next = logProgress(next, id, { status, confidence: confidence || undefined, minutes: mins, solveTimeMin: (status === 'independent' || status === 'with-hints') && activeKind === 'problem' ? mins || undefined : undefined, rubric, practiced: mode === 'existing' && status === item?.status && status !== 'not-started' && !mins }, first);
         // Today's revision: moves its schedule on from the first study instead of leaving it due tomorrow.
         if (isRevising && learned) next = reviewItem(next, id, recall, ctx);
         return next;
       },
-      { success: mode === 'new' ? `Added “${title.trim()}”${isRevising && learned ? ' and logged today’s revision' : ''}` : `${item?.title} updated` },
+      { success: `${mode === 'new' ? `Added “${title.trim()}”${isRevising && learned ? ' and logged today’s revision' : ''}` : `${item?.title} updated`}${!isRevising && doneOn < today ? ` for ${formatDay(doneOn, today).toLowerCase()}` : ''}` },
     );
     if (!fb) return;
     if (!another) return close();
@@ -318,6 +327,11 @@ export function LogSheet({
               <Field label="Minutes spent (optional)" htmlFor="log-min" hint={activeKind === 'problem' ? 'Also recorded as solve time.' : undefined}>
                 <input id="log-min" className="st-input num" inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="e.g. 25" />
               </Field>
+              {!isRevising && (
+                <Field label="Done on" htmlFor="log-done" hint={doneOn < today ? `Counts toward ${formatDay(doneOn, today).toLowerCase()}’s quests.` : 'Forgot to log it? Pick the day you did it.'}>
+                  <input id="log-done" type="date" className="st-input num" max={today} value={doneOn} onChange={(e) => setDoneOn(e.target.value && e.target.value <= today ? e.target.value : today)} />
+                </Field>
+              )}
             </div>
           </div>
         )}

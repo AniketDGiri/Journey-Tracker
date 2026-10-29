@@ -124,7 +124,7 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
         if (g && feedback.levelUp) toast({ tone: 'level', title: `Level ${feedback.levelUp}`, detail: feedback.rankUp ? `Rank up — you are now ${feedback.rankUp}.` : 'Your foundations are getting stronger.' });
         if (g) for (const a of feedback.achievements) toast({ tone: 'level', title: 'Achievement unlocked', detail: a });
         // System notices (penalties, Penalty Zone recoveries) show even on silent actions.
-        if (g) for (const m of feedback.messages) toast({ tone: m.includes('survived') ? 'level' : 'error', title: m });
+        if (g) for (const m of feedback.messages) toast({ tone: m.includes('survived') || m.includes('lifted') ? 'level' : 'error', title: m });
         return feedback;
       } catch (e) {
         if (e instanceof ActionError) toast({ tone: 'error', title: e.message });

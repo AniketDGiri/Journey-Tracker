@@ -12,6 +12,7 @@ import { levelInfo, totalXp, totalXpForLevel } from './progression';
  *  - Missing again the next day escalates it (×1.5, then ×2).
  *  - The Penalty Zone: completing every daily quest the following day wins half of it back.
  *  - A week or month that ends with under half its challenges done costs half a challenge reward.
+ *  - Work logged late for a failed day that completes it lifts that day's penalty.
  *
  * Fairness rules: rest days and days covered by a streak shield are exempt, nothing before
  * `settings.penaltiesSince` is ever judged, and a penalty never drops you below your rank.
@@ -27,6 +28,7 @@ export const escalation = (consecutive: number) => ESCALATION[Math.min(Math.max(
 
 const dayRef = (day: DayKey) => `daily:${day}`;
 const redeemRef = (day: DayKey) => `redeem:${day}`;
+const liftRef = (day: DayKey) => `lift:${day}`;
 
 export interface DayJudgement {
   day: DayKey;
@@ -80,6 +82,13 @@ export function syncPenalties(state: AppState, ctx: { today: DayKey; now: string
     const j = judgeDay(state, day, marks);
     if (!j.failed) {
       if (!j.exempt) consecutive = 0;
+      // Work logged late for this day completed it: hand back what was taken (less any recovery already paid).
+      const charged = eventFor(s, dayRef(day));
+      const back = charged ? -charged.amount - (eventFor(s, redeemRef(day))?.amount ?? 0) : 0;
+      if (back > 0 && !eventFor(s, liftRef(day))) {
+        s = record(s, liftRef(day), back, `Penalty lifted · ${formatDay(day)}’s quests completed from a late log`, day, now);
+        messages.push(`[SYSTEM] Penalty lifted. +${back} XP returned for ${formatDay(day, today).toLowerCase()}.`);
+      }
       continue;
     }
     consecutive++;
@@ -152,7 +161,7 @@ export function penaltyZone(state: AppState, today: DayKey): PenaltyZone | null 
   if (!penaltiesActive(state)) return null;
   const y = addDays(today, -1);
   const ev = eventFor(state, dayRef(y));
-  if (!ev) return null;
+  if (!ev || eventFor(state, liftRef(y))) return null;
   const j = judgeDay(state, y);
   const redeemed = eventFor(state, redeemRef(y));
   return { day: y, missed: j.missed, lost: -ev.amount, recover: redeemed ? redeemed.amount : Math.round(-ev.amount * REDEEM_SHARE), survived: !!redeemed };
@@ -165,7 +174,7 @@ export function atStakeToday(state: AppState, today: DayKey): { missed: number; 
   if (j.exempt || !j.total) return null;
   // Today would extend the run of failed days ending yesterday.
   let consecutive = 1;
-  for (let d = addDays(today, -1); eventFor(state, dayRef(d)); d = addDays(d, -1)) consecutive++;
+  for (let d = addDays(today, -1); eventFor(state, dayRef(d)) && !eventFor(state, liftRef(d)); d = addDays(d, -1)) consecutive++;
   const multiplier = escalation(consecutive);
   return { missed: j.missed, xp: Math.round(j.missed * state.settings.xp.dailyQuest * multiplier), multiplier };
 }

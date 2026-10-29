@@ -36,13 +36,14 @@ const totalOf = (qs: Quest[]) => requiredOf(qs).length;
 // ── Quest objectives (System style) ─────────────────────────────────────
 
 /** One quest as a System objective: check, title, progress and its action or reward. */
-function Objective({ q }: { q: Quest }) {
+function Objective({ q, day }: { q: Quest; day?: string }) {
   const { state, act } = useStore();
   const { open, navigate } = useUI();
   const go = () => {
     const a = q.action;
     if (!a) return;
-    if (a.type === 'log') open({ type: 'log', domain: a.domain });
+    // Logging from a past day records the work on that day, so it counts toward that day's quests.
+    if (a.type === 'log') open({ type: 'log', domain: a.domain, date: day });
     else if (a.type === 'revise') open({ type: 'focus' });
     else navigate(a.to);
   };
@@ -91,7 +92,7 @@ function Objective({ q }: { q: Quest }) {
 }
 
 /** The System window holding one cadence's quests. */
-function QuestWindow({ tag, title, subtitle, quests, extra, footer }: { tag: string; title: string; subtitle: string; quests: Quest[]; extra?: ReactNode; footer?: ReactNode }) {
+function QuestWindow({ tag, title, subtitle, quests, extra, footer, day }: { tag: string; title: string; subtitle: string; quests: Quest[]; extra?: ReactNode; footer?: ReactNode; day?: string }) {
   const done = doneOf(quests);
   const total = totalOf(quests);
   const all = total > 0 && done === total;
@@ -113,7 +114,7 @@ function QuestWindow({ tag, title, subtitle, quests, extra, footer }: { tag: str
       {quests.length ? (
         <ul className="mt-2 flex flex-col divide-y divide-line/70">
           {[...quests].sort((a, b) => Number(!!a.bonus) - Number(!!b.bonus)).map((q) => (
-            <Objective key={q.ref} q={q} />
+            <Objective key={q.ref} q={q} day={day} />
           ))}
         </ul>
       ) : (
@@ -307,6 +308,7 @@ function DailyTab() {
           title={day === today ? 'Sharpen the blade today' : `Daily quests · ${formatDay(day, today)}`}
           subtitle="Complete them from what you log, then claim the reward. Resets at midnight."
           quests={chosen}
+          day={isPast ? day : undefined}
           extra={dayNav}
           footer={
             <>
