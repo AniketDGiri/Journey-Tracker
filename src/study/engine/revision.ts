@@ -17,14 +17,15 @@ export function isLearned(item: PracticeItem): boolean {
   return LEARNED_STATUSES.has(item.status);
 }
 
-export function startLearning(review: ReviewState, today: DayKey, intervals: number[]): ReviewState {
+/** `auto: false` (planned revisions) never sets a date: the player picks one in the revision plan. */
+export function startLearning(review: ReviewState, today: DayKey, intervals: number[], auto = true): ReviewState {
   if (review.stage >= 0) return { ...review, lastStudiedAt: today };
   return {
     ...review,
     stage: 0,
     firstStudiedAt: review.firstStudiedAt ?? today,
     lastStudiedAt: today,
-    nextReviewAt: addDays(today, intervals[0] ?? 1),
+    nextReviewAt: auto ? addDays(today, intervals[0] ?? 1) : review.nextReviewAt,
   };
 }
 
@@ -43,22 +44,31 @@ export function nextInterval(stage: number, quality: RecallQuality, intervals: n
   }
 }
 
-export function applyRecall(review: ReviewState, quality: RecallQuality, today: DayKey, intervals: number[]): ReviewState {
-  const base = review.stage < 0 ? startLearning(review, today, intervals) : review;
+export function applyRecall(review: ReviewState, quality: RecallQuality, today: DayKey, intervals: number[], auto = true): ReviewState {
+  const base = review.stage < 0 ? startLearning(review, today, intervals, auto) : review;
   const { stage, interval } = nextInterval(base.stage, quality, intervals);
   return {
     ...base,
     stage,
     lastReviewedAt: today,
-    nextReviewAt: addDays(today, interval),
+    // Planned mode: a finished revision leaves the item unplanned until you pick its next date.
+    nextReviewAt: auto ? addDays(today, interval) : undefined,
+    planned: undefined,
     successCount: base.successCount + (quality === 'success' ? 1 : 0),
     lapseCount: base.lapseCount + (quality === 'fail' ? 1 : 0),
     history: [...base.history, { date: today, quality, interval }].slice(-50),
   };
 }
 
-export function reschedule(review: ReviewState, date: DayKey): ReviewState {
-  return { ...review, nextReviewAt: date };
+/** A hand-picked revision date; `undefined` takes the item off the plan. */
+export function reschedule(review: ReviewState, date: DayKey | undefined): ReviewState {
+  return { ...review, nextReviewAt: date, planned: date ? true : undefined };
+}
+
+/** Where the ladder would put the next revision, from the last study or revision. */
+export function ladderDate(review: ReviewState, today: DayKey, intervals: number[]): DayKey {
+  const from = review.lastReviewedAt ?? review.lastStudiedAt ?? today;
+  return addDays(from, intervals[Math.max(0, Math.min(review.stage, intervals.length - 1))] ?? 1);
 }
 
 export type DueBucket = 'overdue' | 'today' | 'upcoming' | 'none';

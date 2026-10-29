@@ -144,16 +144,18 @@ export function availableDailyQuests(state: AppState, today: DayKey): Quest[] {
     todays.filter((a) => a.type === 'review'),
     (e) => e.itemId,
   );
+  const planned = state.settings.revisionMode !== 'auto';
+  // Planned mode: only what you planned for this very day; nothing is asked of other days.
   const stillDue = state.items.filter(
-    (it) => isLearned(it) && it.review.nextReviewAt && diffDays(it.review.nextReviewAt, today) >= 0,
+    (it) => isLearned(it) && it.review.nextReviewAt && (planned ? it.review.nextReviewAt === today : diffDays(it.review.nextReviewAt, today) >= 0),
   ).length;
-  const revTarget = Math.min(t.reviewsPerDay, stillDue + reviewedToday);
+  const revTarget = planned ? stillDue + reviewedToday : Math.min(t.reviewsPerDay, stillDue + reviewedToday);
   if (revTarget > 0) {
     quests.push(
       mk({
         id: 'daily-revise',
-        title: `Clear ${revTarget} revision${revTarget > 1 ? 's' : ''}`,
-        detail: 'Recall first, then check your notes.',
+        title: planned ? `Revise ${revTarget} planned item${revTarget > 1 ? 's' : ''}` : `Clear ${revTarget} revision${revTarget > 1 ? 's' : ''}`,
+        detail: planned ? 'From your revision plan. Recall first, then check your notes.' : 'Recall first, then check your notes.',
         progress: reviewedToday,
         target: revTarget,
         action: { type: 'revise' },

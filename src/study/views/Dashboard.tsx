@@ -250,7 +250,7 @@ export function Dashboard() {
               {(['dsa', 'hld', 'lld'] as const).map((d, i) => (
                 <li key={d} className="rounded-lg border border-line p-3">
                   <span className="num mr-2 text-violet-soft">{i + 1}.</span>
-                  Open <button className="font-medium text-ink underline underline-offset-4" onClick={() => navigate(d)}>{DOMAIN_META[d].label}</button> and log something you already know — it enters your revision cycle tomorrow.
+                  Open <button className="font-medium text-ink underline underline-offset-4" onClick={() => navigate(d)}>{DOMAIN_META[d].label}</button> and log something you already know — then plan when to revise it in Quests → Revision plan.
                 </li>
               ))}
             </ol>

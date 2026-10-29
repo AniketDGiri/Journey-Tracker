@@ -9,6 +9,7 @@ import { daysOverdue, nextInterval } from '../../engine/revision';
 import { addDays, formatDay } from '../../lib/date';
 import { Bar, Button, Empty, Modal, Segmented } from '../ui';
 import { DiffBadge, DomainTag } from '../bits';
+import { weekendDays } from '../../views/RevisionPlan';
 
 /**
  * Focused revision: one card at a time. Recall first, then reveal notes, then
@@ -53,9 +54,12 @@ export function FocusSheet({ domain: d0 }: { domain?: Domain }) {
     setDone((d) => ({ ...d, [item.id]: 'skipped' }));
     setRevealed(false);
   };
+  const planned = state.settings.revisionMode !== 'auto';
+  // Planned revisions move to the next weekend day after today; automatic ones to tomorrow.
+  const postponeTo = planned ? (weekendDays(addDays(today, 1), 1)[0]?.[0] ?? addDays(today, 1)) : addDays(today, 1);
   const postpone = () => {
     if (!item) return;
-    if (act((s, ctx) => rescheduleItem(s, item.id, addDays(today, 1), ctx), { silent: true })) {
+    if (act((s, ctx) => rescheduleItem(s, item.id, postponeTo, ctx), { silent: true })) {
       setDone((d) => ({ ...d, [item.id]: 'skipped' }));
       setRevealed(false);
     }
@@ -93,7 +97,11 @@ export function FocusSheet({ domain: d0 }: { domain?: Domain }) {
               {tally.skipped ? ` · ${tally.skipped} skipped` : ''}
             </p>
             {state.settings.gamification && xp > 0 && <p className="num text-sm text-violet-soft">+{xp} XP</p>}
-            <p className="max-w-sm text-xs text-ink-muted">Forgotten items come back tomorrow. That’s the system working, not a failure.</p>
+            <p className="max-w-sm text-xs text-ink-muted">
+              {planned
+                ? 'Revised items go back to your completed list. Plan the forgotten ones again soon in Quests → Revision plan.'
+                : 'Forgotten items come back tomorrow. That’s the system working, not a failure.'}
+            </p>
             <Button variant="primary" onClick={close}>
               Done
             </Button>
@@ -136,13 +144,13 @@ export function FocusSheet({ domain: d0 }: { domain?: Domain }) {
               {(['fail', 'partial', 'success'] as RecallQuality[]).map((q) => (
                 <Button key={q} variant={q === 'success' ? 'primary' : 'secondary'} className="h-auto flex-col gap-0.5 py-2.5" onClick={() => grade(q)}>
                   <span>{q === 'fail' ? 'Forgot' : q === 'partial' ? 'Partial' : 'Recalled'}</span>
-                  <span className="num text-[10px] opacity-70">next {formatDay(addDays(today, nextInterval(item.review.stage, q, state.settings.intervals).interval), today).toLowerCase()}</span>
+                  <span className="num text-[10px] opacity-70">{planned ? 'you plan the next one' : `next ${formatDay(addDays(today, nextInterval(item.review.stage, q, state.settings.intervals).interval), today).toLowerCase()}`}</span>
                 </Button>
               ))}
             </div>
             <div className="flex justify-between">
               <Button variant="ghost" size="sm" onClick={postpone}>
-                Postpone to tomorrow
+                Postpone to {planned ? `${formatDay(postponeTo, today).toLowerCase()}` : 'tomorrow'}
               </Button>
               <Button variant="ghost" size="sm" onClick={skip}>
                 <SkipForward size={13} aria-hidden="true" /> Skip for now

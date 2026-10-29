@@ -3,7 +3,7 @@ import { Download, Upload } from 'lucide-react';
 import type { Settings as S, XpRules } from '../domain/types';
 import { DEFAULT_SETTINGS } from '../domain/defaults';
 import { useStore } from '../store/AppStore';
-import { updateSettings, validateIntervals } from '../engine/actions';
+import { setRevisionMode, updateSettings, validateIntervals } from '../engine/actions';
 import { migrate, toExport } from '../store/schema';
 import { Button, Field, Panel, Segmented, Toggle } from '../components/ui';
 import { cn } from '../lib/cn';
@@ -180,6 +180,23 @@ export function Settings() {
       </Panel>
 
       <Panel title="Revision schedule">
+        <Field label="How revision dates are set" hint={s.revisionMode === 'auto' ? 'Every learned item is scheduled on the interval ladder below.' : 'Nothing is scheduled for you. Pick what to revise, and when, in Quests → Revision plan.'}>
+          <Segmented
+            label="Revision scheduling"
+            size="sm"
+            value={s.revisionMode}
+            onChange={(m) =>
+              act((st, ctx) => setRevisionMode(st, m, ctx), {
+                success: m === 'auto' ? 'Automatic revision dates on' : 'Revision dates are yours to plan. Automatic dates cleared.',
+              })
+            }
+            options={[
+              { value: 'planned', label: 'Planned by me' },
+              { value: 'auto', label: 'Automatic (spaced repetition)' },
+            ]}
+          />
+        </Field>
+        <div className="mt-4" />
         <Field label="Intervals in days" htmlFor="set-int" hint="Successful recall climbs one step; partial halves the current step; forgetting returns to the first step.">
           <input id="set-int" className={cn('st-input num', intervalErr && 'border-rose')} value={intervals} onChange={(e) => setIntervals(e.target.value)} aria-invalid={!!intervalErr} />
         </Field>

@@ -8,8 +8,9 @@ import { toDayKey } from '../lib/date';
  * 3: daily study-time goal default moved from 3h to 2h.
  * 4: planner goals, training phases (fitness) and nutrition tracking.
  * 5: the Java track (topics + syllabus) added to DSA.
+ * 6: revisions are planned by hand by default; automatic dates are cleared once.
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const emptyFitness = (): AppState['fitness'] => ({ activePhaseId: 'phase-0', starts: {}, logs: [] });
 
@@ -20,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   penaltiesSince: '',
   reducedMotion: 'system',
   intervals: [1, 3, 7, 14, 30, 60],
+  revisionMode: 'planned',
   xp: {
     solveEasy: 10,
     solveMedium: 25,

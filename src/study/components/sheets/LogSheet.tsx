@@ -311,7 +311,7 @@ export function LogSheet({
                 )}
                 {revising && learned && (
                   <p className="text-xs text-ink-muted">
-                    Saved as studied{studiedOn && studiedOn < today ? ` on ${formatDay(studiedOn, today)}` : ''}, with today's revision logged. Its next revision is scheduled from today.
+                    Saved as studied{studiedOn && studiedOn < today ? ` on ${formatDay(studiedOn, today)}` : ''}, with today's revision logged.{state.settings.revisionMode === 'auto' ? ' Its next revision is scheduled from today.' : ' Plan its next revision in Quests → Revision plan.'}
                   </p>
                 )}
               </fieldset>

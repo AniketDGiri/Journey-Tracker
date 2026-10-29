@@ -65,6 +65,11 @@ export function migrate(raw: unknown): AppState {
     );
   }
 
+  // v5 → v6: revisions are planned by hand. Dates the ladder set are dropped once; hand-picked ones stay.
+  if (version < 6 && settings.revisionMode === 'planned') {
+    itemList = itemList.map((i) => (i.review.nextReviewAt && !i.review.planned ? { ...i, review: { ...i.review, nextReviewAt: undefined } } : i));
+  }
+
   // v4 → v5: the Java track joins DSA. Added once; anything you already have is kept as is.
   let topicList = topics as AppState['topics'];
   if (version < 5) {

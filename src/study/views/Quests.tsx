@@ -12,20 +12,21 @@ import { cn } from '../lib/cn';
 import { Badge, Bar, Button, Panel, Ring, Segmented } from '../components/ui';
 import { QuestList } from '../components/progress';
 import { Planner } from '../components/planner';
+import { RevisionPlan } from './RevisionPlan';
 import { DomainTag } from '../components/bits';
 import { PenaltyZone, SystemTag, SystemWindow } from '../components/system';
 import { atStakeToday, judgeDay, penaltiesActive, penaltyLog, penaltyZone, type PenaltyEntry } from '../engine/penalties';
 import { missLabel } from '../engine/missed';
 import { MissBreakdownPanel, MissReasonNote, MissedDayPrompt } from '../components/missed';
 
-type Tab = 'daily' | 'weekly' | 'monthly' | 'planner' | 'bosses' | 'achievements';
+type Tab = 'daily' | 'weekly' | 'monthly' | 'revise' | 'planner' | 'bosses' | 'achievements';
 
 const TAB_KEY = 'ascend.quests.tab';
 
 function readTab(): Tab {
   try {
     const t = window.localStorage.getItem(TAB_KEY) as Tab | null;
-    return t && ['daily', 'weekly', 'monthly', 'planner', 'bosses', 'achievements'].includes(t) ? t : 'daily';
+    return t && ['daily', 'weekly', 'monthly', 'revise', 'planner', 'bosses', 'achievements'].includes(t) ? t : 'daily';
   } catch {
     return 'daily';
   }
@@ -716,6 +717,7 @@ export function Quests() {
           { value: 'daily', label: `Daily · ${count(daily)}` },
           { value: 'weekly', label: `Weekly · ${count(weekly)}` },
           { value: 'monthly', label: `Monthly · ${count(monthly)}` },
+          { value: 'revise', label: 'Revision plan' },
           { value: 'planner', label: 'Planner' },
           { value: 'bosses', label: 'Bosses & missions' },
           { value: 'achievements', label: 'Achievements' },
@@ -725,6 +727,7 @@ export function Quests() {
       {tab === 'daily' && <DailyTab />}
       {tab === 'weekly' && <WeeklyTab />}
       {tab === 'monthly' && <MonthlyTab />}
+      {tab === 'revise' && <RevisionPlan />}
       {tab === 'planner' && planner}
       {tab === 'bosses' && <BossesTab />}
       {tab === 'achievements' && <AchievementsTab />}

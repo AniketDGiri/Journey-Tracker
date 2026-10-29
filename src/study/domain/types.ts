@@ -37,6 +37,8 @@ export interface ReviewState {
   lastStudiedAt?: DayKey;
   lastReviewedAt?: DayKey;
   nextReviewAt?: DayKey;
+  /** The date was chosen by the player (revision plan), not set by the spaced-repetition ladder. */
+  planned?: boolean;
   successCount: number;
   lapseCount: number;
   history: ReviewEntry[];
@@ -229,6 +231,8 @@ export interface Settings {
   reducedMotion: 'system' | 'on' | 'off';
   /** Spaced-repetition ladder in days. */
   intervals: number[];
+  /** 'planned': you pick revision dates (e.g. weekends); 'auto': the ladder schedules them. */
+  revisionMode: 'planned' | 'auto';
   xp: XpRules;
   targets: {
     dsaPerDay: number;

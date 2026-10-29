@@ -22,7 +22,7 @@ import { RUBRICS, makeItem } from '../domain/catalog';
 import { uid } from '../lib/id';
 import { addDays } from '../lib/date';
 import { grant, levelInfo, totalXp } from './progression';
-import { applyRecall, isLearned, reschedule } from './revision';
+import { applyRecall, isLearned, ladderDate, reschedule } from './revision';
 import { rubricRatio } from './mastery';
 import { computeStreak } from './streak';
 import { ACHIEVEMENTS, evaluateAchievements } from './achievements';
@@ -265,7 +265,7 @@ export function logProgress(state: AppState, id: string, input: ProgressInput, c
         stage: 0,
         firstStudiedAt: item.review.firstStudiedAt ?? ctx.today,
         lastStudiedAt: ctx.today,
-        nextReviewAt: addDays(ctx.today, intervals[0] ?? 1),
+        nextReviewAt: state.settings.revisionMode === 'auto' ? addDays(ctx.today, intervals[0] ?? 1) : item.review.nextReviewAt,
       },
     };
   } else if (statusChanged || rubricGain || minutes || input.practiced) {
@@ -309,7 +309,7 @@ export function reviewItem(state: AppState, id: string, quality: RecallQuality, 
   if (!isLearned(prev)) throw new ActionError('Only learned items can be revised. Log a solve first.');
   const item: PracticeItem = {
     ...prev,
-    review: applyRecall(prev.review, quality, ctx.today, state.settings.intervals),
+    review: applyRecall(prev.review, quality, ctx.today, state.settings.intervals, state.settings.revisionMode === 'auto'),
     updatedAt: ctx.now,
   };
   let next = replaceItem(state, item);
@@ -332,6 +332,30 @@ export function rescheduleItem(state: AppState, id: string, date: DayKey, ctx: C
   const it = findItem(state, id);
   if (!isLearned(it)) throw new ActionError('Only learned items have a revision schedule.');
   return replaceItem(state, { ...it, review: reschedule(it.review, date), updatedAt: ctx.now });
+}
+
+/** Put learned items on the revision plan for `date`, or take them off it with `null`. */
+export function planRevisions(state: AppState, ids: string[], date: DayKey | null, ctx: Ctx): AppState {
+  if (date && date < ctx.today) throw new ActionError('Pick today or a later day.');
+  const set = new Set(ids);
+  return {
+    ...state,
+    items: state.items.map((it) => (set.has(it.id) && isLearned(it) ? { ...it, review: reschedule(it.review, date ?? undefined), updatedAt: ctx.now } : it)),
+  };
+}
+
+/**
+ * Switch how revision dates are set. To 'planned': dates the ladder set are dropped, hand-picked ones stay.
+ * To 'auto': learned items without a date get one from the ladder.
+ */
+export function setRevisionMode(state: AppState, mode: AppState['settings']['revisionMode'], ctx: Ctx): AppState {
+  const items = state.items.map((it) => {
+    if (!isLearned(it) || it.review.stage < 0) return it;
+    if (mode === 'planned' && it.review.nextReviewAt && !it.review.planned) return { ...it, review: { ...it.review, nextReviewAt: undefined } };
+    if (mode === 'auto' && !it.review.nextReviewAt) return { ...it, review: { ...it.review, nextReviewAt: ladderDate(it.review, ctx.today, state.settings.intervals) } };
+    return it;
+  });
+  return { ...state, items, settings: { ...state.settings, revisionMode: mode } };
 }
 
 // ── Topics ───────────────────────────────────────────────────────────────
