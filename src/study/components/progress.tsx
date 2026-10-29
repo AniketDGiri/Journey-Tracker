@@ -9,7 +9,7 @@ import { claimQuest } from '../engine/actions';
 import { domainMastery, type TopicStats } from '../engine/mastery';
 import { addDays, daysBetween, formatDay, monthLabel, startOfWeek } from '../lib/date';
 import { cn } from '../lib/cn';
-import { Bar, Button, Ring } from './ui';
+import { Badge, Bar, Button, Ring } from './ui';
 import { DomainTag, TOPIC_STATE_META } from './bits';
 import { Sigil } from './Sigil';
 import { MAX_SHIELDS } from '../engine/streak';
@@ -116,6 +116,7 @@ export function QuestList({ quests, compact }: { quests: Quest[]; compact?: bool
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               {q.domain && <DomainTag domain={q.domain} />}
+              {q.bonus && <Badge tone="ember">Bonus</Badge>}
               <p className={cn('truncate text-sm', q.claimed ? 'text-ink-muted' : 'text-ink')}>{q.title}</p>
             </div>
             <div className="mt-1.5 flex items-center gap-2">

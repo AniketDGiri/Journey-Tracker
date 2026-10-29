@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Award, Check, ChevronLeft, ChevronRight, Crown, Flame, Lock, TriangleAlert, X } from 'lucide-react';
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
-import { availableDailyQuests, dailyQuests, missions, monthlyChallenges, weeklyChallenges, type Quest } from '../engine/quests';
+import { availableDailyQuests, dailyQuests, missions, monthlyChallenges, requiredOf, weeklyChallenges, type Quest } from '../engine/quests';
 import { claimQuest, setQuestPlan } from '../engine/actions';
 import { bossStatuses } from '../engine/bosses';
 import { ACHIEVEMENTS, ACHIEVEMENT_GROUPS, evaluateAchievements } from '../engine/achievements';
@@ -29,7 +29,9 @@ function readTab(): Tab {
   }
 }
 
-const doneOf = (qs: Quest[]) => qs.filter((q) => q.complete).length;
+// Counts only cover required quests; bonus quests are extra credit.
+const doneOf = (qs: Quest[]) => requiredOf(qs).filter((q) => q.complete).length;
+const totalOf = (qs: Quest[]) => requiredOf(qs).length;
 
 // ── Quest objectives (System style) ─────────────────────────────────────
 
@@ -58,6 +60,7 @@ function Objective({ q }: { q: Quest }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           {q.domain && <DomainTag domain={q.domain} />}
+          {q.bonus && <Badge tone="ember">Bonus</Badge>}
           <p className={cn('truncate text-sm', q.claimed ? 'text-ink-muted line-through decoration-ink-faint' : 'text-ink')}>{q.title}</p>
         </div>
         <div className="mt-1.5 flex items-center gap-2">
@@ -90,7 +93,8 @@ function Objective({ q }: { q: Quest }) {
 /** The System window holding one cadence's quests. */
 function QuestWindow({ tag, title, subtitle, quests, extra, footer }: { tag: string; title: string; subtitle: string; quests: Quest[]; extra?: ReactNode; footer?: ReactNode }) {
   const done = doneOf(quests);
-  const all = quests.length > 0 && done === quests.length;
+  const total = totalOf(quests);
+  const all = total > 0 && done === total;
   return (
     <SystemWindow label={tag}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -99,16 +103,16 @@ function QuestWindow({ tag, title, subtitle, quests, extra, footer }: { tag: str
           <h2 className="mt-2 text-lg font-semibold">{title}</h2>
           <p className="mt-1 text-sm text-ink-soft">{subtitle}</p>
         </div>
-        <Ring value={quests.length ? done / quests.length : 0} size={64} stroke={3} tone={all ? 'jade' : 'arc'} label={`${done} of ${quests.length} complete`}>
+        <Ring value={total ? done / total : 0} size={64} stroke={3} tone={all ? 'jade' : 'arc'} label={`${done} of ${total} complete`}>
           <span className="num text-base font-semibold">
-            {done}/{quests.length}
+            {done}/{total}
           </span>
         </Ring>
       </div>
       {extra}
       {quests.length ? (
         <ul className="mt-2 flex flex-col divide-y divide-line/70">
-          {quests.map((q) => (
+          {[...quests].sort((a, b) => Number(!!a.bonus) - Number(!!b.bonus)).map((q) => (
             <Objective key={q.ref} q={q} />
           ))}
         </ul>
@@ -125,12 +129,13 @@ const PERIOD = { day: ['daily', 'today'], week: ['weekly', 'this week'], month: 
 function StatusLine({ quests, period }: { quests: Quest[]; period: keyof typeof PERIOD }) {
   const [kind, when] = PERIOD[period];
   const done = doneOf(quests);
+  const total = totalOf(quests);
   const unclaimed = quests.filter((q) => q.complete && !q.claimed).length;
-  if (quests.length && done === quests.length)
+  if (total && done === total)
     return <span className="text-jade">Every {kind} quest complete.{unclaimed ? ` ${unclaimed} reward${unclaimed > 1 ? 's' : ''} waiting to be claimed.` : ''}</span>;
   return (
     <span className="flex items-center gap-1.5 text-ember-soft">
-      <TriangleAlert size={13} aria-hidden="true" /> {quests.length - done} left {when}.{unclaimed ? ` ${unclaimed} ready to claim.` : ''}
+      <TriangleAlert size={13} aria-hidden="true" /> {total - done} left {when}.{unclaimed ? ` ${unclaimed} ready to claim.` : ''}
     </span>
   );
 }
@@ -208,7 +213,7 @@ function DailyTab() {
     () =>
       Array.from({ length: 14 }, (_, i) => addDays(today, i - 13)).map((d) => {
         const qs = dailyQuests(state, d);
-        return { key: d, top: d === today ? 'Today' : shortWeekday(d), done: doneOf(qs), total: qs.length, current: d === today };
+        return { key: d, top: d === today ? 'Today' : shortWeekday(d), done: doneOf(qs), total: totalOf(qs), current: d === today };
       }),
     [state, today],
   );
@@ -268,6 +273,7 @@ function DailyTab() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       {q.domain && <DomainTag domain={q.domain} />}
+                      {q.bonus && <Badge tone="ember">Bonus</Badge>}
                       <span className="truncate text-sm">{q.title}</span>
                     </div>
                     <p className="mt-0.5 truncate text-[11px] text-ink-muted">{q.detail}</p>
@@ -366,7 +372,7 @@ function WeeklyTab() {
     () =>
       Array.from({ length: 8 }, (_, i) => addDays(ws, (i - 7) * 7)).map((w) => {
         const qs = weeklyChallenges(state, w);
-        return { key: w, top: w === ws ? 'This wk' : formatDay(w), done: doneOf(qs), total: qs.length, current: w === ws };
+        return { key: w, top: w === ws ? 'This wk' : formatDay(w), done: doneOf(qs), total: totalOf(qs), current: w === ws };
       }),
     [state, ws],
   );
@@ -380,7 +386,7 @@ function WeeklyTab() {
         footer={
           <>
             <StatusLine quests={weekly} period="week" />
-            {penaltiesActive(state) && doneOf(weekly) * 2 < weekly.length && (
+            {penaltiesActive(state) && doneOf(weekly) * 2 < totalOf(weekly) && (
               <span className="text-rose">
                 Under half by Sunday: <span className="num font-semibold">−{Math.round(state.settings.xp.weeklyChallenge * 0.5)} XP</span>
               </span>
@@ -410,7 +416,7 @@ function MonthlyTab() {
       Array.from({ length: 6 }, (_, i) => addMonths(ms, i - 5)).map((m) => {
         // A past month is judged at its last day; the current one as of today.
         const qs = monthlyChallenges(state, m === ms ? today : endOfMonth(m));
-        return { key: m, top: m === ms ? 'This mo' : monthLabel(m), done: doneOf(qs), total: qs.length, current: m === ms };
+        return { key: m, top: m === ms ? 'This mo' : monthLabel(m), done: doneOf(qs), total: totalOf(qs), current: m === ms };
       }),
     [state, ms, today],
   );
@@ -424,7 +430,7 @@ function MonthlyTab() {
         footer={
           <>
             <StatusLine quests={monthly} period="month" />
-            {penaltiesActive(state) && doneOf(monthly) * 2 < monthly.length && (
+            {penaltiesActive(state) && doneOf(monthly) * 2 < totalOf(monthly) && (
               <span className="text-rose">
                 Under half by month end: <span className="num font-semibold">−{Math.round(state.settings.xp.monthlyChallenge * 0.5)} XP</span>
               </span>
@@ -641,7 +647,7 @@ export function Quests() {
   if (!state.settings.gamification) return <div className="grid gap-4">{planner}</div>;
 
   const { level, streak } = derived;
-  const count = (qs: Quest[]) => `${doneOf(qs)}/${qs.length}`;
+  const count = (qs: Quest[]) => `${doneOf(qs)}/${totalOf(qs)}`;
 
   return (
     <div className="flex flex-col gap-5">
@@ -684,7 +690,7 @@ export function Quests() {
           ).map(([label, qs]) => (
             <div key={label}>
               <dt className="st-label">{label}</dt>
-              <dd className={cn('num mt-1 text-xl font-semibold', qs.length > 0 && doneOf(qs) === qs.length && 'text-jade')}>{count(qs)}</dd>
+              <dd className={cn('num mt-1 text-xl font-semibold', totalOf(qs) > 0 && doneOf(qs) === totalOf(qs) && 'text-jade')}>{count(qs)}</dd>
             </div>
           ))}
         </dl>

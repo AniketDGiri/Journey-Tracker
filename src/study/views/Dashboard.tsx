@@ -3,7 +3,7 @@ import { ArrowRight, Award, CalendarClock, Info, RotateCcw } from 'lucide-react'
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
 import { recommend } from '../engine/recommend';
-import { dailyQuests, weeklyChallenges } from '../engine/quests';
+import { dailyQuests, requiredOf, weeklyChallenges } from '../engine/quests';
 import { ACHIEVEMENTS } from '../engine/achievements';
 import { addDays, diffDays, formatDay, startOfWeek } from '../lib/date';
 import { Button, Panel } from '../components/ui';
@@ -177,7 +177,9 @@ export function Dashboard() {
   const quests = useMemo(() => dailyQuests(state, today), [state, today]);
   const weekly = useMemo(() => weeklyChallenges(state, today), [state, today]);
   const game = state.settings.gamification;
-  const doneCount = quests.filter((q) => q.complete).length;
+  // Bonus quests are extra credit: they don't count toward the day's total.
+  const required = requiredOf(quests);
+  const doneCount = required.filter((q) => q.complete).length;
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
@@ -203,7 +205,7 @@ export function Dashboard() {
 
       <Panel
         className="lg:col-span-7"
-        title={game ? `Today’s quests · ${doneCount}/${quests.length}` : `Today’s plan · ${doneCount}/${quests.length}`}
+        title={game ? `Today’s quests · ${doneCount}/${required.length}` : `Today’s plan · ${doneCount}/${required.length}`}
         action={
           game && (
             <button className="text-xs text-ink-muted hover:text-ink" onClick={() => navigate('quests')}>

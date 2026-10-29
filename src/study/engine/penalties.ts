@@ -1,7 +1,7 @@
 import type { AppState, DayKey, XpEvent } from '../domain/types';
 import { uid } from '../lib/id';
 import { addDays, addMonths, endOfMonth, formatDay, monthYear, startOfMonth, startOfWeek, weekday } from '../lib/date';
-import { dailyQuests, monthlyChallenges, weeklyChallenges } from './quests';
+import { dailyQuests, monthlyChallenges, requiredOf, weeklyChallenges } from './quests';
 import { computeStreak } from './streak';
 import { levelInfo, totalXp, totalXpForLevel } from './progression';
 
@@ -37,7 +37,8 @@ export interface DayJudgement {
 }
 
 export function judgeDay(state: AppState, day: DayKey, marks?: Map<DayKey, string>): DayJudgement {
-  const qs = dailyQuests(state, day);
+  // Bonus quests are optional: skipping one is never a failure.
+  const qs = requiredOf(dailyQuests(state, day));
   const missed = qs.filter((q) => !q.complete).length;
   if (state.settings.restDays.includes(weekday(day))) return { day, total: qs.length, missed, failed: false, exempt: 'rest' };
   if (marks?.get(day) === 'shielded') return { day, total: qs.length, missed, failed: false, exempt: 'shield' };

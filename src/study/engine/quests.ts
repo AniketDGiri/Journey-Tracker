@@ -31,7 +31,12 @@ export interface Quest {
   claimed: boolean;
   reward: number;
   action?: QuestAction;
+  /** Optional extra: claimable for XP, but never needed to finish the day and never penalised. */
+  bonus?: boolean;
 }
+
+/** The quests that count toward finishing a day, week or month (bonus quests excluded). */
+export const requiredOf = (qs: Quest[]) => qs.filter((q) => !q.bonus);
 
 const PRACTICE_TYPES = new Set(['solve', 'learn', 'progress', 'attempt', 'session']);
 
@@ -92,8 +97,9 @@ export function availableDailyQuests(state: AppState, today: DayKey): Quest[] {
       mk({
         id: 'daily-java',
         domain: 'dsa',
+        bonus: true,
         title: `Study ${t.javaPerDay} Java concept${t.javaPerDay > 1 ? 's' : ''}`,
-        detail: 'Learn it, write a small program with it, log the outcome.',
+        detail: 'Optional bonus. Learn it, write a small program with it, log the outcome.',
         progress: n,
         target: t.javaPerDay,
         action: { type: 'navigate', to: 'dsa' },
