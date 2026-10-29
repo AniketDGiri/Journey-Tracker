@@ -272,5 +272,15 @@ export interface AppState {
    * entry shows every quest; an entry — even an empty one — shows only those.
    */
   questPlan?: Record<DayKey, string[]>;
+  /** Why a day's daily quests were left unfinished, in the player's words (see engine/missed). */
+  missReasons?: Record<DayKey, MissReason>;
   settings: Settings;
+}
+
+export type MissReasonKind = 'work' | 'commitments' | 'health' | 'travel' | 'energy' | 'planning' | 'other';
+
+export interface MissReason {
+  reason: MissReasonKind;
+  note?: string;
+  at: Iso;
 }

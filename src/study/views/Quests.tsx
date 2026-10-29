@@ -14,7 +14,9 @@ import { QuestList } from '../components/progress';
 import { Planner } from '../components/planner';
 import { DomainTag } from '../components/bits';
 import { PenaltyZone, SystemTag, SystemWindow } from '../components/system';
-import { atStakeToday, penaltiesActive, penaltyLog, penaltyZone, type PenaltyEntry } from '../engine/penalties';
+import { atStakeToday, judgeDay, penaltiesActive, penaltyLog, penaltyZone, type PenaltyEntry } from '../engine/penalties';
+import { missLabel } from '../engine/missed';
+import { MissBreakdownPanel, MissReasonNote, MissedDayPrompt } from '../components/missed';
 
 type Tab = 'daily' | 'weekly' | 'monthly' | 'planner' | 'bosses' | 'achievements';
 
@@ -142,7 +144,7 @@ function StatusLine({ quests, period }: { quests: Quest[]; period: keyof typeof 
 }
 
 /** A strip of past periods: each cell is a day, week or month and how many of its quests were completed. */
-function HistoryStrip({ title, cells, note }: { title: string; cells: { key: string; top: string; done: number; total: number; current?: boolean }[]; note?: string }) {
+function HistoryStrip({ title, cells, note }: { title: string; cells: { key: string; top: string; done: number; total: number; current?: boolean; why?: string }[]; note?: string }) {
   return (
     <Panel title={title}>
       <ol className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${cells.length <= 8 ? cells.length : 7}, minmax(0, 1fr))` }}>
@@ -152,7 +154,7 @@ function HistoryStrip({ title, cells, note }: { title: string; cells: { key: str
           return (
             <li
               key={c.key}
-              title={`${c.top}: ${c.done}/${c.total}`}
+              title={`${c.top}: ${c.done}/${c.total}${c.why ? ` · ${c.why}` : ''}`}
               className={cn(
                 'flex flex-col items-center gap-1 rounded-lg border px-1.5 py-2',
                 all ? 'border-jade bg-jade/25' : some ? 'border-arc-soft/70 bg-arc/20' : c.current ? 'border-line-strong' : 'border-line',
@@ -214,7 +216,8 @@ function DailyTab() {
     () =>
       Array.from({ length: 14 }, (_, i) => addDays(today, i - 13)).map((d) => {
         const qs = dailyQuests(state, d);
-        return { key: d, top: d === today ? 'Today' : shortWeekday(d), done: doneOf(qs), total: totalOf(qs), current: d === today };
+        const why = state.missReasons?.[d];
+        return { key: d, top: d === today ? 'Today' : shortWeekday(d), done: doneOf(qs), total: totalOf(qs), current: d === today, why: why && `${missLabel(why.reason)}${why.note ? `: ${why.note}` : ''}` };
       }),
     [state, today],
   );
@@ -260,6 +263,7 @@ function DailyTab() {
           what="complete every daily quest"
         />
       )}
+      <MissedDayPrompt />
       {planning ? (
         <SystemWindow label="Choose daily quests">
           <SystemTag>DAILY QUEST · {formatDay(day, today).toUpperCase()}</SystemTag>
@@ -309,7 +313,12 @@ function DailyTab() {
           subtitle="Complete them from what you log, then claim the reward. Resets at midnight."
           quests={chosen}
           day={isPast ? day : undefined}
-          extra={dayNav}
+          extra={
+            <>
+              {dayNav}
+              {isPast && <MissReasonNote day={day} failed={judgeDay(state, day).failed && day >= state.settings.penaltiesSince} />}
+            </>
+          }
           footer={
             <>
               <StatusLine quests={chosen} period="day" />
@@ -328,7 +337,8 @@ function DailyTab() {
           }
         />
       )}
-      <HistoryStrip title="Last 14 days" cells={history} note="Days count the quests you chose for them." />
+      <HistoryStrip title="Last 14 days" cells={history} note="Days count the quests you chose for them. Hover a missed day to see why." />
+      <MissBreakdownPanel />
       {(log.length > 0 || penaltiesActive(state)) && <PenaltyLog entries={log} />}
     </div>
   );

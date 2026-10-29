@@ -1,4 +1,4 @@
-import type { AppState, Goal, SubItem } from '../domain/types';
+import type { AppState, Goal, MissReasonKind, SubItem } from '../domain/types';
 import { DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } from '../domain/defaults';
 import { javaTrack } from '../domain/catalog';
 import { emptyNutrition } from '../domain/nutrition';
@@ -106,6 +106,7 @@ export function migrate(raw: unknown): AppState {
       : emptyNutrition(),
     achievements: (isObj(payload.achievements) ? payload.achievements : {}) as AppState['achievements'],
     questPlan: cleanQuestPlan(payload.questPlan),
+    missReasons: cleanMissReasons(payload.missReasons),
     settings: settings as AppState['settings'],
   };
 }
@@ -115,6 +116,18 @@ function cleanQuestPlan(v: unknown): Record<string, string[]> | undefined {
   const out: Record<string, string[]> = {};
   for (const [day, ids] of Object.entries(v)) {
     if (isDayKey(day) && Array.isArray(ids)) out[day] = ids.filter((id): id is string => typeof id === 'string');
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+const MISS_KINDS = new Set(['work', 'commitments', 'health', 'travel', 'energy', 'planning', 'other']);
+
+function cleanMissReasons(v: unknown): AppState['missReasons'] {
+  if (!isObj(v)) return undefined;
+  const out: NonNullable<AppState['missReasons']> = {};
+  for (const [day, r] of Object.entries(v)) {
+    if (!isDayKey(day) || !isObj(r) || !MISS_KINDS.has(r.reason as string)) continue;
+    out[day] = { reason: r.reason as MissReasonKind, at: typeof r.at === 'string' ? r.at : '', ...(typeof r.note === 'string' && r.note.trim() ? { note: r.note.trim() } : {}) };
   }
   return Object.keys(out).length ? out : undefined;
 }

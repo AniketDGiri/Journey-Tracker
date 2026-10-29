@@ -11,6 +11,7 @@ import { BranchOverview, Heatmap, PlayerCard, QuestList } from '../components/pr
 import { TodayPlan } from '../components/planner';
 import { CountdownCard, MotivationCard, StudyTimeCard } from '../components/journey';
 import { DomainTag } from '../components/bits';
+import { MissedDayPrompt } from '../components/missed';
 import { DOMAIN_META } from '../domain/catalog';
 
 function NextAction() {
@@ -183,6 +184,9 @@ export function Dashboard() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-12">
+      <div className="empty:hidden lg:col-span-12">
+        <MissedDayPrompt />
+      </div>
       <div className="lg:col-span-4">
         <PlayerCard />
       </div>
