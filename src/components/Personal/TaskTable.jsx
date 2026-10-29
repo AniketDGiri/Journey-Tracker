@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { GrowText } from '../common/ui'
 import { useAppStore } from '../../store/AppStore'
 import { calendarLink } from '../../utils/googleCalendar'
 import { isOverdue, rangeLabel, spansDays } from '../../utils/taskDates'
+import { SubtaskList, subtaskCount } from '../../study/components/subtasks'
 
 const NEW = '__new__'
 
@@ -82,6 +83,13 @@ export default function TaskTable({
   showProject = false, showSection = true, emptyLabel = 'No tasks here.',
 }) {
   const cols = 9 + (showProject ? 1 : 0) + (showSection ? 1 : 0)
+  // Tasks whose subtask checklist is open.
+  const [openSubs, setOpenSubs] = useState(() => new Set())
+  const toggleSubs = (id) => setOpenSubs((p) => {
+    const n = new Set(p)
+    n.has(id) ? n.delete(id) : n.add(id)
+    return n
+  })
 
   return (
     <table className="tbl">
@@ -108,8 +116,11 @@ export default function TaskTable({
         {tasks.map((t) => {
           const isDone = t.section === 'done'
           const overdue = isOverdue(t, today)
+          const subsOpen = openSubs.has(t.id)
+          const count = subtaskCount(t.subtasks)
           return (
-            <tr key={t.id} className={`${isDone ? 'row-done' : ''} ${overdue ? 'row-alert' : ''}`}>
+            <Fragment key={t.id}>
+            <tr className={`${isDone ? 'row-done' : ''} ${overdue ? 'row-alert' : ''}`}>
               <td className="cell-center">
                 <input
                   type="checkbox"
@@ -120,6 +131,15 @@ export default function TaskTable({
               </td>
               <td className="td-text">
                 <GrowText value={t.title} onChange={(e) => update(t.id, { title: e.target.value })} />
+                <button
+                  type="button"
+                  className="link-btn"
+                  onClick={() => toggleSubs(t.id)}
+                  aria-expanded={subsOpen}
+                  title={subsOpen ? 'Hide subtasks' : 'Show and add subtasks'}
+                >
+                  {subsOpen ? '▾' : '▸'} {count ? `${count} subtasks` : '+ subtasks'}
+                </button>
               </td>
               <td>
                 <input
@@ -176,6 +196,17 @@ export default function TaskTable({
               )}
               <td><button className="btn-icon" onClick={() => remove(t.id)} title="Delete task">✕</button></td>
             </tr>
+            {subsOpen && (
+              <tr className="row-subtasks">
+                <td />
+                <td colSpan={cols - 1} className="td-text">
+                  <div style={{ maxWidth: 560, padding: '4px 0 8px' }}>
+                    <SubtaskList value={t.subtasks} onChange={(list) => update(t.id, { subtasks: list })} />
+                  </div>
+                </td>
+              </tr>
+            )}
+            </Fragment>
           )
         })}
       </tbody>

@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react'
 import { useAppStore } from '../../store/AppStore'
 import { Bar, Empty, GrowText, pct } from '../common/ui'
 import TaskTable, { PRIORITY, EFFORT, CategorySelect } from './TaskTable'
+import { SubtaskList } from '../../study/components/subtasks'
 
 const STATUS = ['Idea', 'Planned', 'Active', 'Paused', 'Done']
 
 const BLANK_TASK = {
   title: '', section: 'todo', priority: 'Medium', effort: 'Medium',
-  category: '', start: '', end: '', notes: '',
+  category: '', start: '', end: '', notes: '', subtasks: [],
 }
 
 export default function Projects() {
@@ -20,6 +21,7 @@ export default function Projects() {
   const [selected, setSelected] = useState(null)
   const [newProject, setNewProject] = useState('')
   const [draft, setDraft] = useState(BLANK_TASK)
+  const [withSubs, setWithSubs] = useState(false)
 
   const stat = useMemo(() => {
     const m = new Map()
@@ -143,8 +145,27 @@ export default function Projects() {
             />
             <input className="input input-dt" type="datetime-local" value={draft.start} onChange={set('start')} title="Starts" />
             <input className="input input-dt" type="datetime-local" value={draft.end} min={draft.start || undefined} onChange={set('end')} title="Ends" />
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setWithSubs((v) => !v)}
+              aria-expanded={withSubs}
+              title="Break the new task into steps"
+            >
+              {withSubs ? '− Subtasks' : '+ Subtasks'}{draft.subtasks.length ? ` (${draft.subtasks.length})` : ''}
+            </button>
             <button className="btn btn-primary" type="submit">Add task</button>
           </form>
+
+          {withSubs && (
+            <div style={{ maxWidth: 560 }}>
+              <SubtaskList
+                label={draft.title.trim() ? `Subtasks for “${draft.title.trim()}”` : 'Subtasks for the new task'}
+                value={draft.subtasks}
+                onChange={(list) => setDraft((p) => ({ ...p, subtasks: list }))}
+              />
+            </div>
+          )}
 
           <div className="table-scroll">
             <TaskTable

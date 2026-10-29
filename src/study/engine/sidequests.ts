@@ -1,3 +1,4 @@
+import type { Subtask } from '../components/subtasks';
 /**
  * Personal tasks shown as Solo Leveling side quests. The tasks themselves live in
  * the original Personal store; this only derives ranks and rewards from them, so
@@ -17,6 +18,8 @@ export interface PersonalTask {
   notes?: string;
   /** Day the task was moved to Done; null once reopened. Absent on tasks cleared before it was tracked. */
   doneAt?: string | null;
+  /** Checklist steps inside the task. */
+  subtasks?: Subtask[];
 }
 
 /** The patch that moves a task between sections, stamping or clearing the day it was cleared. */

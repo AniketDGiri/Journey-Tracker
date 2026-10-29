@@ -4,6 +4,7 @@ import { addDays, format, parseISO } from 'date-fns';
 import { cn } from '../lib/cn';
 import { Bar, Button, Empty, Panel, Segmented } from '../components/ui';
 import { SystemTag, SystemWindow } from '../components/system';
+import { SubtaskList, subtaskCount } from '../components/subtasks';
 import {
   RANKS,
   RANK_TONE,
@@ -279,6 +280,8 @@ function QuestRow({ task: t, store }: { task: PersonalTask; store: LegacyStore }
   const rank = rankOf(t);
   const project = projects.find((p) => p.id === t.projectId);
   const cal = calendarLink(t);
+  const subs = subtaskCount(t.subtasks);
+  const subsDone = !!t.subtasks?.length && t.subtasks.every((x) => x.done);
   return (
     <li className="py-3">
       <div className="flex flex-wrap items-center gap-3.5">
@@ -300,6 +303,11 @@ function QuestRow({ task: t, store }: { task: PersonalTask; store: LegacyStore }
           <p className="mt-1 flex flex-wrap items-center gap-2 px-1 text-xs text-ink-muted">
             {t.category && <span className="rounded-full border border-line-strong px-2 text-ink-soft">{t.category}</span>}
             {project && <span>{project.name}</span>}
+            {subs && (
+              <button type="button" onClick={() => setOpen(true)} className={cn('num hover:text-ink', subsDone ? 'text-jade' : 'text-ink-soft')} title="Subtasks done">
+                ☰ {subs}
+              </button>
+            )}
             <span className={cn('num', dueTone(t, today))}>{rangeLabel(t)}</span>
             {spansDays(t) && <span className="rounded border border-line-strong px-1.5 text-[10px]">multi-day</span>}
           </p>
@@ -376,6 +384,9 @@ function QuestRow({ task: t, store }: { task: PersonalTask; store: LegacyStore }
             <Button variant="ghost" size="sm" className="h-10 text-rose hover:text-rose" onClick={() => remove(t.id)}>
               <Trash2 size={14} aria-hidden="true" /> Abandon
             </Button>
+          </div>
+          <div className="w-full max-w-xl border-t border-line pt-3">
+            <SubtaskList value={t.subtasks} onChange={(list) => update(t.id, { subtasks: list })} />
           </div>
         </div>
       )}
