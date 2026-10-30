@@ -1,6 +1,6 @@
 import type { AppState, DayKey } from '../domain/types';
 import { HABITS, NUTRITION_PLAN } from '../domain/nutrition';
-import { PHASES } from '../domain/fitness';
+import { PHASES, isCardioOnly, strengthLogs } from '../domain/fitness';
 import { addDays, diffDays } from '../lib/date';
 import { dayTotals, getDay } from './nutrition';
 import { phaseProgress, weekDone } from './fitness';
@@ -115,8 +115,10 @@ export const CLEAR_AT = 3;
 
 /** The day's Daily Quest, judged from what was logged on that day. */
 export function dailyQuest(state: AppState, tasks: PersonalTask[], day: DayKey): DayQuest {
-  const trained = state.fitness.logs.some((l) => l.date === day);
-  const restDay = !trained && state.fitness.logs.some((l) => l.date === addDays(day, -1));
+  const strength = strengthLogs(state.fitness.logs);
+  const trained = strength.some((l) => l.date === day);
+  const restDay = !trained && strength.some((l) => l.date === addDays(day, -1));
+  const cardio = state.fitness.logs.filter((l) => l.date === day).reduce((n, l) => n + l.cardioMin, 0);
   const t = dayTotals(state, day);
   const d = getDay(state, day);
   const habitsDone = HABITS.filter((h) => d.habits[h.id]).length;
@@ -129,7 +131,7 @@ export function dailyQuest(state: AppState, tasks: PersonalTask[], day: DayKey):
     {
       id: 'train',
       label: 'Strength training',
-      detail: trained ? 'Workout logged' : restDay ? 'Rest day after yesterday’s session' : 'Log a workout, or rest the day after one',
+      detail: trained ? 'Workout logged' : restDay ? 'Rest day after yesterday’s session' : cardio ? `${cardio} min cardio logged · strength still open` : 'Log a workout, or rest the day after one',
       done: trained || restDay,
     },
     { id: 'meals', label: 'Log every meal', detail: `${Math.min(t.mealsLogged, meals)} / ${meals} meals`, done: t.mealsLogged >= meals },
@@ -209,7 +211,8 @@ export function lifeSummary(state: AppState, tasks: PersonalTask[], today: DayKe
   }
 
   const logs = state.fitness.logs;
-  const workoutXp = logs.reduce((n, l) => n + LIFE_XP.workout + (l.formVideoShared ? LIFE_XP.formVideo : 0) + (l.cardioMin >= 15 ? LIFE_XP.cardio : 0), 0);
+  // Cardio-only sessions earn the cardio bonus, not the workout reward.
+  const workoutXp = logs.reduce((n, l) => n + (isCardioOnly(l) ? 0 : LIFE_XP.workout) + (l.formVideoShared ? LIFE_XP.formVideo : 0) + (l.cardioMin >= 15 ? LIFE_XP.cardio : 0), 0);
   let nutritionXp = 0;
   for (const day of Object.keys(state.nutrition.days)) {
     const t = dayTotals(state, day);
@@ -351,11 +354,11 @@ export const LIFE_ACHIEVEMENTS: LifeAchievementDef[] = [
   { id: 'dq-total-50', name: 'Daily Grinder', description: 'Clear 50 Daily Quests in total.', group: 'Daily Quest', reward: 4, measure: (c) => [c.quests.filter((q) => q.cleared).length, 50] },
 
   // Training
-  { id: 'wo-1', name: 'First Rep', description: 'Log your first workout.', group: 'Training', measure: (c) => [c.state.fitness.logs.length, 1] },
-  { id: 'wo-10', name: 'Getting the Hang', description: 'Log 10 workouts.', group: 'Training', measure: (c) => [c.state.fitness.logs.length, 10] },
-  { id: 'wo-25', name: 'Gym Regular', description: 'Log 25 workouts.', group: 'Training', reward: 2, measure: (c) => [c.state.fitness.logs.length, 25] },
-  { id: 'wo-50', name: 'Iron Body', description: 'Log 50 workouts.', group: 'Training', reward: 3, measure: (c) => [c.state.fitness.logs.length, 50] },
-  { id: 'wo-100', name: 'Hundred Sessions', description: 'Log 100 workouts.', group: 'Training', reward: 5, measure: (c) => [c.state.fitness.logs.length, 100] },
+  { id: 'wo-1', name: 'First Rep', description: 'Log your first workout.', group: 'Training', measure: (c) => [strengthLogs(c.state.fitness.logs).length, 1] },
+  { id: 'wo-10', name: 'Getting the Hang', description: 'Log 10 workouts.', group: 'Training', measure: (c) => [strengthLogs(c.state.fitness.logs).length, 10] },
+  { id: 'wo-25', name: 'Gym Regular', description: 'Log 25 workouts.', group: 'Training', reward: 2, measure: (c) => [strengthLogs(c.state.fitness.logs).length, 25] },
+  { id: 'wo-50', name: 'Iron Body', description: 'Log 50 workouts.', group: 'Training', reward: 3, measure: (c) => [strengthLogs(c.state.fitness.logs).length, 50] },
+  { id: 'wo-100', name: 'Hundred Sessions', description: 'Log 100 workouts.', group: 'Training', reward: 5, measure: (c) => [strengthLogs(c.state.fitness.logs).length, 100] },
   { id: 'wo-perfect-week', name: 'Full Week', description: 'Do every workout of a phase week.', group: 'Training', reward: 2, measure: (c) => [perfectWeeks(c.state), 1] },
   {
     id: 'wo-phase',

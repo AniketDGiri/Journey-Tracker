@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Dumbbell, Moon, Play, Trash2, Video } from 'lucide-react';
-import { PHASES } from '../domain/fitness';
+import { Dumbbell, HeartPulse, Moon, Play, Trash2, Video } from 'lucide-react';
+import { CARDIO_ONLY, PHASES, isCardioOnly } from '../domain/fitness';
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
 import { deleteWorkoutLog, exerciseHistory, getPhase, lastPerformance, nextWorkout, overloadHint, phaseProgress, setActivePhase, setPhaseStart, weekRange, weekSchedule, type SlotStatus } from '../engine/fitness';
@@ -40,6 +40,12 @@ export function Workout() {
     for (const w of phase.workouts) for (const e of w.exercises) if (!seen.has(e.id)) seen.set(e.id, e.name);
     return [...seen.entries()].map(([id, name]) => ({ id, name, history: exerciseHistory(state, id) }));
   }, [phase, state]);
+
+  const cardioButton = (
+    <Button variant="secondary" onClick={() => open({ type: 'workout-log', phaseId: phase.id, workoutId: CARDIO_ONLY })}>
+      <HeartPulse size={14} aria-hidden="true" /> Log cardio only
+    </Button>
+  );
 
   const logs = useMemo(() => [...state.fitness.logs].filter((l) => l.phaseId === phase.id).sort((a, b) => b.date.localeCompare(a.date) || b.at.localeCompare(a.at)), [state.fitness.logs, phase.id]);
 
@@ -114,14 +120,18 @@ export function Workout() {
                   Opener: {next.exercises.find((e) => e.opener)?.name} · {next.exercises.length} exercises + {next.cardioMin} min cardio
                 </p>
                 {schedule.find((s) => s.date === today)?.plan === 'rest' && <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-muted"><Moon size={12} aria-hidden="true" /> Today is a suggested rest day — any day this week counts.</p>}
-                <Button variant="primary" className="mt-5" onClick={() => open({ type: 'workout-log', phaseId: phase.id, workoutId: next.id })}>
-                  <Play size={14} aria-hidden="true" /> Log {next.code}
-                </Button>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button variant="primary" onClick={() => open({ type: 'workout-log', phaseId: phase.id, workoutId: next.id })}>
+                    <Play size={14} aria-hidden="true" /> Log {next.code}
+                  </Button>
+                  {cardioButton}
+                </div>
               </>
             ) : (
               <>
                 <h3 className="mt-3 text-xl font-semibold">{prog.finished ? `${phase.name} complete` : 'All sessions done this week'}</h3>
                 <p className="mt-1 text-sm text-ink-soft">{prog.finished ? 'Great work. Add the next phase when you receive it.' : phase.restGuidance}</p>
+                <div className="mt-5">{cardioButton}</div>
               </>
             )}
           </div>
@@ -153,7 +163,13 @@ export function Workout() {
                     <span className="text-[10px] uppercase opacity-80">{shortWeekday(s.date)}</span>
                     <span className="num text-sm text-ink">{parseDayKey(s.date).getDate()}</span>
                     <span className="text-[11px] font-medium">{w ? w.code : 'Rest'}</span>
-                    <span className="hidden text-[10px] opacity-80 sm:block">{s.status === 'done' && s.doneOn && s.doneOn !== s.date ? `Done ${shortWeekday(s.doneOn)}` : meta.label}</span>
+                    <span className="hidden text-[10px] opacity-80 sm:block">
+                      {s.status === 'done' && s.doneOn && s.doneOn !== s.date
+                        ? `Done ${shortWeekday(s.doneOn)}`
+                        : s.status !== 'done' && s.logged.length && s.logged.every(isCardioOnly)
+                          ? 'Cardio'
+                          : meta.label}
+                    </span>
                   </button>
                 );
               })}
@@ -246,12 +262,16 @@ export function Workout() {
           {logs.length ? (
             <ul className="flex max-h-[460px] flex-col divide-y divide-line/60 overflow-y-auto pr-1">
               {logs.map((l) => {
-                const w = phase.workouts.find((x) => x.id === l.workoutId);
+                const cardioOnly = isCardioOnly(l);
+                const label = cardioOnly ? 'Cardio' : phase.workouts.find((x) => x.id === l.workoutId)?.code;
                 const sets = l.exercises.reduce((n, e) => n + e.sets.length, 0);
                 return (
                   <li key={l.id} className="group py-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{w?.code}</span>
+                      <span className="flex items-center gap-1 text-sm font-medium">
+                        {cardioOnly && <HeartPulse size={13} className="text-rose" aria-hidden="true" />}
+                        {label}
+                      </span>
                       <span className="text-xs text-ink-muted">{formatDay(l.date, today)}</span>
                       {l.formVideoShared && (
                         <span title="Form video shared" className="text-arc-soft">
@@ -260,15 +280,23 @@ export function Workout() {
                       )}
                       <button
                         className="ml-auto rounded-md p-1 text-ink-faint opacity-60 hover:text-rose group-hover:opacity-100"
-                        aria-label={`Delete ${w?.code} log from ${formatDay(l.date)}`}
-                        onClick={() => window.confirm('Delete this workout log?') && act((s) => deleteWorkoutLog(s, l.id), { success: 'Workout deleted' })}
+                        aria-label={`Delete ${label} log from ${formatDay(l.date)}`}
+                        onClick={() => window.confirm(cardioOnly ? 'Delete this cardio log?' : 'Delete this workout log?') && act((s) => deleteWorkoutLog(s, l.id), { success: cardioOnly ? 'Cardio deleted' : 'Workout deleted' })}
                       >
                         <Trash2 size={12} />
                       </button>
                     </div>
                     <p className="num mt-0.5 text-[11px] text-ink-muted">
-                      {sets} sets{l.durationMin ? ` · ${l.durationMin} min` : ''}
-                      {l.cardioMin ? ` · ${l.cardioMin} min cardio` : ' · no cardio'}
+                      {cardioOnly ? (
+                        <>
+                          {l.cardioMin} min cardio{l.durationMin ? ` · ${l.durationMin} min session` : ''}
+                        </>
+                      ) : (
+                        <>
+                          {sets} sets{l.durationMin ? ` · ${l.durationMin} min` : ''}
+                          {l.cardioMin ? ` · ${l.cardioMin} min cardio` : ' · no cardio'}
+                        </>
+                      )}
                     </p>
                     {l.notes && <p className="mt-1 text-xs text-ink-soft">{l.notes}</p>}
                   </li>

@@ -63,6 +63,14 @@ export interface WorkoutLog {
   exercises: LoggedExercise[];
 }
 
+/** workoutId of a session with cardio and no strength work. */
+export const CARDIO_ONLY = 'cardio';
+
+export const isCardioOnly = (l: Pick<WorkoutLog, 'workoutId'>) => l.workoutId === CARDIO_ONLY;
+
+/** Strength sessions only: cardio-only days don't count as a workout of the phase. */
+export const strengthLogs = (logs: WorkoutLog[]) => logs.filter((l) => !isCardioOnly(l));
+
 export interface FitnessState {
   activePhaseId?: string;
   /** Start date per phase. */

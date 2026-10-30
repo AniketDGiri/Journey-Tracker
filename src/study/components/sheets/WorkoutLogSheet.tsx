@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
-import type { LoggedSet } from '../../domain/fitness';
+import { CARDIO_ONLY, type LoggedSet } from '../../domain/fitness';
 import { useStore } from '../../store/AppStore';
 import { useUI } from '../../store/ui';
 import { getPhase, lastPerformance, logWorkout, overloadHint, trainedYesterday } from '../../engine/fitness';
@@ -22,7 +22,10 @@ export function WorkoutLogSheet({ phaseId, workoutId: w0 }: { phaseId: string; w
   const { close } = useUI();
   const phase = getPhase(phaseId);
   const [workoutId, setWorkoutId] = useState(w0);
-  const workout = phase?.workouts.find((w) => w.id === workoutId);
+  const cardioOnly = workoutId === CARDIO_ONLY;
+  // A cardio-only session keeps the last strength workout around so switching back loses nothing.
+  const [lastStrength, setLastStrength] = useState(w0 === CARDIO_ONLY ? (phase?.workouts[0]?.id ?? '') : w0);
+  const workout = phase?.workouts.find((w) => w.id === (cardioOnly ? lastStrength : workoutId));
   const [date, setDate] = useState(today);
 
   const buildDraft = (wid: string): Draft[] =>
@@ -36,7 +39,7 @@ export function WorkoutLogSheet({ phaseId, workoutId: w0 }: { phaseId: string; w
         sets: Array.from({ length: e.sets }, (_, i) => ({ reps: '', weight: last?.sets[i]?.weight != null ? String(last.sets[i].weight) : last?.sets[0] ? String(last.sets[0].weight) : '' })),
       };
     });
-  const [draft, setDraft] = useState<Draft[]>(() => buildDraft(w0));
+  const [draft, setDraft] = useState<Draft[]>(() => buildDraft(w0 === CARDIO_ONLY ? lastStrength : w0));
   const [cardio, setCardio] = useState(String(workout?.cardioMin ?? 15));
   const [duration, setDuration] = useState('');
   const [video, setVideo] = useState(false);
@@ -47,6 +50,8 @@ export function WorkoutLogSheet({ phaseId, workoutId: w0 }: { phaseId: string; w
   const upd = (i: number, fn: (d: Draft) => Draft) => setDraft((ds) => ds.map((d, j) => (j === i ? fn(d) : d)));
   const filledSets = draft.reduce((n, d) => n + d.sets.filter((s) => Number(s.reps) > 0).length, 0);
   const totalSets = workout.exercises.reduce((n, e) => n + e.sets, 0);
+  const cardioMin = Number(cardio) || 0;
+  const canSave = cardioOnly ? cardioMin > 0 : filledSets > 0;
 
   const save = () => {
     const ok = act(
@@ -58,10 +63,10 @@ export function WorkoutLogSheet({ phaseId, workoutId: w0 }: { phaseId: string; w
             workoutId,
             date,
             durationMin: Number(duration) || undefined,
-            cardioMin: Number(cardio) || 0,
+            cardioMin,
             formVideoShared: video,
             notes,
-            exercises: draft.map((d) => ({
+            exercises: cardioOnly ? [] : draft.map((d) => ({
               exerciseId: d.exerciseId,
               name: d.name,
               substitution: d.showSub ? d.substitution : undefined,
@@ -70,7 +75,7 @@ export function WorkoutLogSheet({ phaseId, workoutId: w0 }: { phaseId: string; w
           },
           ctx,
         ),
-      { success: `${workout.code} logged · ${filledSets} sets` },
+      { success: cardioOnly ? `Cardio logged · ${cardioMin} min` : `${workout.code} logged · ${filledSets} sets` },
     );
     if (ok) close();
   };
@@ -80,17 +85,29 @@ export function WorkoutLogSheet({ phaseId, workoutId: w0 }: { phaseId: string; w
       open
       onClose={close}
       wide
-      title={`Log ${workout.code} · ${workout.title}`}
+      title={cardioOnly ? 'Log cardio' : `Log ${workout.code} · ${workout.title}`}
       footer={
         <>
           <span className="mr-auto self-center text-xs text-ink-muted">
-            <span className="num text-ink">{filledSets}</span>/{totalSets} sets filled
+            {cardioOnly ? (
+              cardioMin > 0 ? (
+                <>
+                  <span className="num text-ink">{cardioMin}</span> min cardio
+                </>
+              ) : (
+                'Enter your cardio minutes'
+              )
+            ) : (
+              <>
+                <span className="num text-ink">{filledSets}</span>/{totalSets} sets filled
+              </>
+            )}
           </span>
           <Button variant="ghost" onClick={close}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={save} disabled={!filledSets}>
-            Save workout
+          <Button variant="primary" onClick={save} disabled={!canSave}>
+            {cardioOnly ? 'Save cardio' : 'Save workout'}
           </Button>
         </>
       }
@@ -102,21 +119,28 @@ export function WorkoutLogSheet({ phaseId, workoutId: w0 }: { phaseId: string; w
             value={workoutId}
             onChange={(w) => {
               setWorkoutId(w);
+              if (w === CARDIO_ONLY || w === lastStrength) return;
+              setLastStrength(w);
               setDraft(buildDraft(w));
             }}
-            options={phase.workouts.map((w) => ({ value: w.id, label: w.code }))}
+            options={[...phase.workouts.map((w) => ({ value: w.id, label: w.code })), { value: CARDIO_ONLY, label: 'Cardio only' }]}
           />
           <Field label="Date" htmlFor="wo-date">
             <input id="wo-date" type="date" className="st-input num w-44" max={today} value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
         </div>
-        {trainedYesterday(state, date) && date === today && (
+        {cardioOnly && (
+          <p className="rounded-lg border border-line bg-surface-2/40 px-3 py-2 text-xs text-ink-soft">
+            A cardio-only day: no strength sets needed. It earns the cardio bonus (15+ min) and counts toward Cardio Engine, but it isn’t one of this week’s workouts and doesn’t tick the Daily Quest’s strength objective.
+          </p>
+        )}
+        {!cardioOnly && trainedYesterday(state, date) && date === today && (
           <p className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-xs text-ember-soft">
             You trained yesterday. This phase keeps a rest day between full-body sessions. Log it if you already trained, but consider resting.
           </p>
         )}
 
-        <ol className="flex flex-col gap-3">
+        <ol className={cn('flex flex-col gap-3', cardioOnly && 'hidden')}>
           {workout.exercises.map((e, i) => {
             const last = lastPerformance(state, e.id, date === today ? undefined : date);
             const d = draft[i];
@@ -186,14 +210,14 @@ export function WorkoutLogSheet({ phaseId, workoutId: w0 }: { phaseId: string; w
           })}
         </ol>
 
-        <div className="grid gap-4 border-t border-line pt-5 sm:grid-cols-3">
+        <div className={cn('grid gap-4 sm:grid-cols-3', !cardioOnly && 'border-t border-line pt-5')}>
           <Field label="Cardio (min)" htmlFor="wo-cardio" hint="Target 15 min">
-            <input id="wo-cardio" className="st-input num" inputMode="numeric" value={cardio} onChange={(e) => setCardio(e.target.value.replace(/\D/g, '').slice(0, 3))} />
+            <input id="wo-cardio" className="st-input num" inputMode="numeric" autoFocus={cardioOnly} value={cardio} onChange={(e) => setCardio(e.target.value.replace(/\D/g, '').slice(0, 3))} />
           </Field>
           <Field label="Session length (min)" htmlFor="wo-dur" hint="Aim for under 90">
             <input id="wo-dur" className="st-input num" inputMode="numeric" value={duration} onChange={(e) => setDuration(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="optional" />
           </Field>
-          <div className="self-end pb-1">
+          <div className={cn('self-end pb-1', cardioOnly && 'hidden')}>
             <Checkbox checked={video} onChange={setVideo} label="Shared a form video with my coach" />
           </div>
           <div className="sm:col-span-3">

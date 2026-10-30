@@ -1,5 +1,5 @@
 import type { AppState, DayKey } from '../domain/types';
-import { PHASES, type ExerciseTemplate, type LoggedExercise, type Phase, type WorkoutLog } from '../domain/fitness';
+import { CARDIO_ONLY, PHASES, strengthLogs, type ExerciseTemplate, type LoggedExercise, type Phase, type WorkoutLog } from '../domain/fitness';
 import { addDays, diffDays } from '../lib/date';
 import { uid } from '../lib/id';
 import { ActionError, type Ctx } from './actions';
@@ -45,7 +45,7 @@ export function weekRange(start: DayKey, week: number): [DayKey, DayKey] {
 export function weekDone(state: AppState, phase: Phase, start: DayKey, week: number): Map<string, WorkoutLog> {
   const [a, b] = weekRange(start, week);
   const m = new Map<string, WorkoutLog>();
-  for (const l of [...state.fitness.logs].sort((x, y) => x.date.localeCompare(y.date))) {
+  for (const l of strengthLogs(state.fitness.logs).sort((x, y) => x.date.localeCompare(y.date))) {
     if (l.phaseId === phase.id && l.date >= a && l.date <= b && !m.has(l.workoutId)) m.set(l.workoutId, l);
   }
   return m;
@@ -88,9 +88,9 @@ export function nextWorkout(state: AppState, phase: Phase, start: DayKey, week: 
   return id ? phase.workouts.find((w) => w.id === id) : undefined;
 }
 
-/** Was yesterday a workout? Rest is recommended between consecutive sessions. */
+/** Was yesterday a strength workout? Rest is recommended between consecutive sessions. */
 export function trainedYesterday(state: AppState, today: DayKey): boolean {
-  return state.fitness.logs.some((l) => l.date === addDays(today, -1));
+  return strengthLogs(state.fitness.logs).some((l) => l.date === addDays(today, -1));
 }
 
 export function lastPerformance(state: AppState, exerciseId: string, before?: DayKey): (LoggedExercise & { date: DayKey }) | undefined {
@@ -154,27 +154,29 @@ export interface WorkoutInput {
 
 export function logWorkout(state: AppState, input: WorkoutInput, ctx: Ctx): AppState {
   const phase = getPhase(input.phaseId);
+  const cardioOnly = input.workoutId === CARDIO_ONLY;
   const w = phase?.workouts.find((x) => x.id === input.workoutId);
-  if (!phase || !w) throw new ActionError('Unknown workout.');
+  if (!phase || (!w && !cardioOnly)) throw new ActionError('Unknown workout.');
   if (input.date > ctx.today) throw new ActionError('You can’t log a workout in the future.');
+  if (cardioOnly && !(input.cardioMin > 0)) throw new ActionError('Enter how many minutes of cardio you did.');
   const exercises = input.exercises
     .map((e) => ({ ...e, substitution: e.substitution?.trim() || undefined, sets: e.sets.filter((s) => s.reps > 0).map((s) => ({ reps: Math.round(s.reps), weight: Math.max(0, Math.round(s.weight * 4) / 4) })) }))
-    .filter((e) => e.sets.length);
-  if (!exercises.length) throw new ActionError('Log at least one set.');
+    .filter((e) => e.sets.length && !cardioOnly);
+  if (!exercises.length && !cardioOnly) throw new ActionError('Log at least one set.');
   if (input.durationMin !== undefined && (input.durationMin < 0 || input.durationMin > 600)) throw new ActionError('Duration looks off.');
   const log: WorkoutLog = {
     id: uid('wo'),
     phaseId: phase.id,
-    workoutId: w.id,
+    workoutId: cardioOnly ? CARDIO_ONLY : w!.id,
     date: input.date,
     at: ctx.now,
     durationMin: input.durationMin || undefined,
     cardioMin: Math.max(0, Math.round(input.cardioMin)),
-    formVideoShared: input.formVideoShared,
+    formVideoShared: !cardioOnly && input.formVideoShared,
     notes: input.notes.trim(),
     exercises,
   };
-  const starts = state.fitness.starts[phase.id] ? state.fitness.starts : { ...state.fitness.starts, [phase.id]: input.date };
+  const starts = state.fitness.starts[phase.id] || cardioOnly ? state.fitness.starts : { ...state.fitness.starts, [phase.id]: input.date };
   return { ...state, fitness: { ...state.fitness, activePhaseId: state.fitness.activePhaseId ?? phase.id, starts, logs: [...state.fitness.logs, log] } };
 }
 
