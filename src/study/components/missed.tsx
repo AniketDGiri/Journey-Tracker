@@ -2,17 +2,18 @@ import { useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import type { DayKey, MissReasonKind } from '../domain/types';
 import { useStore } from '../store/AppStore';
-import { MISS_REASONS, missBreakdown, missLabel, setMissReason, unexplainedMisses } from '../engine/missed';
-import { formatDay } from '../lib/date';
+import { MISS_REASONS, missBreakdown, missLabel, reasonsOf, setMissReason, unexplainedLifeMisses, unexplainedMisses, type MissedDay, type MissScope } from '../engine/missed';
+import { formatDay, formatDayInline } from '../lib/date';
 import { cn } from '../lib/cn';
 import { Bar, Button, Panel } from './ui';
 import { SystemTag, SystemWindow } from './system';
+import { useLife } from './life';
 
-const LATER_KEY = 'ascend.missed.later';
+const LATER_KEY: Record<MissScope, string> = { study: 'ascend.missed.later', life: 'ascend.missed.later.life' };
 
-function readLater(): string[] {
+function readLater(scope: MissScope): string[] {
   try {
-    return JSON.parse(window.sessionStorage.getItem(LATER_KEY) ?? '[]');
+    return JSON.parse(window.sessionStorage.getItem(LATER_KEY[scope]) ?? '[]');
   } catch {
     return [];
   }
@@ -69,18 +70,32 @@ function ReasonForm({ initial, onSave, onCancel, saveLabel = 'Record' }: { initi
   );
 }
 
-/** The System asks why the most recent unexplained failed day went wrong. */
+/** The System asks why the most recent unexplained failed study day went wrong. */
 export function MissedDayPrompt() {
-  const { state, today, act } = useStore();
-  const [later, setLater] = useState(readLater);
-  const pending = useMemo(() => unexplainedMisses(state, today).filter((m) => !later.includes(m.day)), [state, today, later]);
+  const { state, today } = useStore();
+  const misses = useMemo(() => unexplainedMisses(state, today), [state, today]);
+  return <MissedPrompt scope="study" misses={misses} what="daily quest" />;
+}
+
+/** The same for the Life Daily Quest. */
+export function LifeMissedDayPrompt() {
+  const { state, today } = useStore();
+  const life = useLife();
+  const misses = useMemo(() => unexplainedLifeMisses(state, life.recent, today), [state, life.recent, today]);
+  return <MissedPrompt scope="life" misses={misses} what="Daily Quest objective" />;
+}
+
+function MissedPrompt({ scope, misses, what }: { scope: MissScope; misses: MissedDay[]; what: string }) {
+  const { today, act } = useStore();
+  const [later, setLater] = useState(() => readLater(scope));
+  const pending = misses.filter((m) => !later.includes(m.day));
   const m = pending[0];
   if (!m) return null;
   const postpone = () => {
     const next = [...later, m.day];
     setLater(next);
     try {
-      window.sessionStorage.setItem(LATER_KEY, JSON.stringify(next));
+      window.sessionStorage.setItem(LATER_KEY[scope], JSON.stringify(next));
     } catch {
       /* not remembered */
     }
@@ -92,12 +107,12 @@ export function MissedDayPrompt() {
         {pending.length > 1 && <span className="num text-[11px] text-ink-muted">{pending.length - 1} more day{pending.length > 2 ? 's' : ''} to report</span>}
       </div>
       <p className="mt-2 text-base font-semibold">
-        {formatDay(m.day, today)}: {m.missed} of {m.total} daily quest{m.total > 1 ? 's' : ''} left unfinished. What got in the way?
+        {formatDay(m.day, today)}: {m.missed} of {m.total} {what}{m.total > 1 ? 's' : ''} left unfinished. What got in the way?
       </p>
       <p className="mt-0.5 text-xs text-ink-muted">Your answer is kept with that day, so you can spot the pattern later.</p>
       <ReasonForm
         key={m.day}
-        onSave={(reason, note) => act((s, ctx) => setMissReason(s, m.day, { reason, note }, ctx), { success: `Reason recorded for ${formatDay(m.day, today).toLowerCase()}` })}
+        onSave={(reason, note) => act((s, ctx) => setMissReason(s, m.day, { reason, note }, ctx, scope), { success: `Reason recorded for ${formatDayInline(m.day, today)}` })}
         onCancel={postpone}
       />
     </SystemWindow>
@@ -105,13 +120,13 @@ export function MissedDayPrompt() {
 }
 
 /** A past day's recorded reason, editable; or the form when a failed day has none. */
-export function MissReasonNote({ day, failed }: { day: DayKey; failed: boolean }) {
+export function MissReasonNote({ day, failed, scope = 'study' }: { day: DayKey; failed: boolean; scope?: MissScope }) {
   const { state, today, act } = useStore();
   const [editing, setEditing] = useState(false);
-  const r = state.missReasons?.[day];
+  const r = reasonsOf(state, scope)[day];
   if (!r && !failed) return null;
   const save = (reason: MissReasonKind, note: string) => {
-    act((s, ctx) => setMissReason(s, day, { reason, note }, ctx), { silent: true });
+    act((s, ctx) => setMissReason(s, day, { reason, note }, ctx, scope), { silent: true });
     setEditing(false);
   };
   return (
@@ -127,7 +142,7 @@ export function MissReasonNote({ day, failed }: { day: DayKey; failed: boolean }
         </div>
       ) : (
         <>
-          <p className="text-ink-soft">{r ? 'Change the reason' : `Why were ${formatDay(day, today).toLowerCase()}’s quests left unfinished?`}</p>
+          <p className="text-ink-soft">{r ? 'Change the reason' : `Why were ${formatDayInline(day, today)}’s quests left unfinished?`}</p>
           <ReasonForm initial={r} onSave={save} onCancel={r ? () => setEditing(false) : undefined} saveLabel={r ? 'Save' : 'Record'} />
         </>
       )}
@@ -136,16 +151,16 @@ export function MissReasonNote({ day, failed }: { day: DayKey; failed: boolean }
 }
 
 /** What got in the way over the last 30 days. */
-export function MissBreakdownPanel() {
+export function MissBreakdownPanel({ scope = 'study' }: { scope?: MissScope }) {
   const { state, today } = useStore();
-  const rows = useMemo(() => missBreakdown(state, today, 30), [state, today]);
+  const rows = useMemo(() => missBreakdown(state, today, 30, scope), [state, today, scope]);
   const recent = useMemo(
     () =>
-      Object.entries(state.missReasons ?? {})
+      Object.entries(reasonsOf(state, scope))
         .filter(([d]) => d < today)
         .sort((a, b) => b[0].localeCompare(a[0]))
         .slice(0, 5),
-    [state.missReasons, today],
+    [state, scope, today],
   );
   if (!rows.length && !recent.length) return null;
   const top = rows[0]?.count ?? 1;

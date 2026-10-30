@@ -278,6 +278,8 @@ export interface AppState {
   questPlan?: Record<DayKey, string[]>;
   /** Why a day's daily quests were left unfinished, in the player's words (see engine/missed). */
   missReasons?: Record<DayKey, MissReason>;
+  /** The same, for the Life Daily Quest (training, nutrition, side quests). */
+  lifeMissReasons?: Record<DayKey, MissReason>;
   settings: Settings;
 }
 

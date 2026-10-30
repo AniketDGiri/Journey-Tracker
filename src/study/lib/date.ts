@@ -64,6 +64,12 @@ export function formatDay(key: DayKey, today?: DayKey): string {
   return `${MONTHS[dt.getMonth()]} ${dt.getDate()}`;
 }
 
+/** formatDay for mid-sentence use: relative words lowercased, calendar dates ("Oct 18") kept as they are. */
+export function formatDayInline(key: DayKey, today?: DayKey): string {
+  const f = formatDay(key, today);
+  return /^[A-Z][a-z]{2} \d/.test(f) ? f : f.toLowerCase();
+}
+
 export function shortWeekday(key: DayKey): string {
   return DAYS[weekday(key)];
 }

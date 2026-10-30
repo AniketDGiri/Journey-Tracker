@@ -3,11 +3,19 @@ import { addDays } from '../lib/date';
 import { judgeDay } from './penalties';
 import { computeStreak } from './streak';
 import type { Ctx } from './actions';
+import type { DayQuest } from './life';
 
 /**
  * Missed-day debriefs: when a day's daily quests were left unfinished, the System asks why.
  * The answers are a record for later — which weeks work ate, which days plans were too big.
+ * Study quests and the Life Daily Quest keep separate records (`scope`).
  */
+
+export type MissScope = 'study' | 'life';
+
+const FIELD = { study: 'missReasons', life: 'lifeMissReasons' } as const;
+
+export const reasonsOf = (state: AppState, scope: MissScope = 'study') => state[FIELD[scope]] ?? {};
 
 export const MISS_REASONS: { id: MissReasonKind; label: string }[] = [
   { id: 'work', label: 'Work' },
@@ -43,20 +51,28 @@ export function unexplainedMisses(state: AppState, today: DayKey): MissedDay[] {
   return out;
 }
 
+/** Recent days the Life Daily Quest wasn't cleared and has no reason yet, newest first (`recent` is newest first). */
+export function unexplainedLifeMisses(state: AppState, recent: DayQuest[], today: DayKey): MissedDay[] {
+  const since = state.settings.penaltiesSince;
+  return recent
+    .filter((q) => q.day < today && q.day >= addDays(today, -ASK_DAYS) && (!since || q.day >= since) && !q.cleared && !state.lifeMissReasons?.[q.day])
+    .map((q) => ({ day: q.day, missed: q.total - q.done, total: q.total }));
+}
+
 /** Record (or with `null`, clear) why `day` was missed. */
-export function setMissReason(state: AppState, day: DayKey, input: { reason: MissReasonKind; note?: string } | null, ctx: Ctx): AppState {
-  const { [day]: _dropped, ...rest } = state.missReasons ?? {};
+export function setMissReason(state: AppState, day: DayKey, input: { reason: MissReasonKind; note?: string } | null, ctx: Ctx, scope: MissScope = 'study'): AppState {
+  const { [day]: _dropped, ...rest } = reasonsOf(state, scope);
   const note = input?.note?.trim();
   const entry: MissReason | undefined = input ? { reason: input.reason, at: ctx.now, ...(note ? { note } : {}) } : undefined;
-  const missReasons = entry ? { ...rest, [day]: entry } : rest;
-  return { ...state, missReasons: Object.keys(missReasons).length ? missReasons : undefined };
+  const reasons = entry ? { ...rest, [day]: entry } : rest;
+  return { ...state, [FIELD[scope]]: Object.keys(reasons).length ? reasons : undefined };
 }
 
 /** How often each reason came up in the last `days` days, most frequent first. */
-export function missBreakdown(state: AppState, today: DayKey, days = 30): { reason: MissReasonKind; count: number }[] {
+export function missBreakdown(state: AppState, today: DayKey, days = 30, scope: MissScope = 'study'): { reason: MissReasonKind; count: number }[] {
   const from = addDays(today, -days);
   const counts = new Map<MissReasonKind, number>();
-  for (const [day, r] of Object.entries(state.missReasons ?? {})) {
+  for (const [day, r] of Object.entries(reasonsOf(state, scope))) {
     if (day >= from && day < today) counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
   }
   return [...counts].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);

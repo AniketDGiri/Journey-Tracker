@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Award, Check, Flame, TriangleAlert, X } from 'lucide-react';
 import { useStore } from '../store/AppStore';
 import { useUI, type Route } from '../store/ui';
@@ -9,6 +9,8 @@ import { formatDay, shortWeekday } from '../lib/date';
 import { cn } from '../lib/cn';
 import { Badge, Bar, Button, Panel, Ring } from '../components/ui';
 import { PenaltyZone, SystemWindow } from '../components/system';
+import { LifeMissedDayPrompt, MissBreakdownPanel, MissReasonNote } from '../components/missed';
+import { missLabel } from '../engine/missed';
 
 /** Where each objective is done, so the quest can send you straight there. */
 const OBJECTIVE_ROUTE: Record<ObjectiveId, Route> = {
@@ -31,6 +33,13 @@ export function LifeSystem() {
     [life.achievements],
   );
   const days = life.recent.slice(0, 14).reverse();
+  const why = (day: string) => {
+    const r = state.lifeMissReasons?.[day];
+    return r && `${missLabel(r.reason)}${r.note ? `: ${r.note}` : ''}`;
+  };
+  const missedDays = days.filter((d) => d.day < today && !d.cleared);
+  const [picked, setPicked] = useState<string | undefined>();
+  const shown = missedDays.find((d) => d.day === picked) ?? [...missedDays].reverse().find((d) => !state.lifeMissReasons?.[d.day]) ?? missedDays[missedDays.length - 1];
 
   return (
     <div className="flex flex-col gap-5">
@@ -47,6 +56,8 @@ export function LifeSystem() {
           what={`clear ${CLEAR_AT} of ${q.total} objectives`}
         />
       )}
+
+      <LifeMissedDayPrompt />
 
       <div className="grid gap-5 lg:grid-cols-12">
         <SystemWindow label="Daily Quest" className="lg:col-span-7">
@@ -179,6 +190,7 @@ export function LifeSystem() {
                     Daily Quest not cleared · {p.short} objective{p.short > 1 ? 's' : ''} short{p.multiplier > 1 ? ` · ×${p.multiplier} repeat` : ''}
                   </span>
                   {p.recovered > 0 && <span className="num shrink-0 text-jade">+{p.recovered} recovered</span>}
+                  {why(p.day) && <span className="hidden max-w-[12rem] shrink-0 truncate rounded-full border border-rose/40 px-2 py-0.5 text-[11px] text-ink-soft sm:inline" title={why(p.day)}>{why(p.day)}</span>}
                   <span className="w-20 shrink-0 text-right text-ink-faint">{formatDay(p.day, today)}</span>
                 </li>
               ))}
@@ -197,9 +209,12 @@ export function LifeSystem() {
           {days.map((d) => (
             <li
               key={d.day}
-              title={`${formatDay(d.day, today)}: ${d.done}/${d.total}${d.perfect ? ' · perfect' : d.cleared ? ' · cleared' : ''}`}
+              title={`${formatDay(d.day, today)}: ${d.done}/${d.total}${d.perfect ? ' · perfect' : d.cleared ? ' · cleared' : why(d.day) ? ` · ${why(d.day)}` : ''}`}
+              onClick={d.day < today && !d.cleared ? () => setPicked(d.day) : undefined}
               className={cn(
                 'flex flex-col items-center gap-1 rounded-lg border px-1 py-2',
+                d.day < today && !d.cleared && 'cursor-pointer hover:border-rose/60',
+                shown?.day === d.day && 'ring-1 ring-rose/60',
                 d.perfect ? 'border-jade bg-jade/25' : d.cleared ? 'border-arc-soft/70 bg-arc/20' : d.day === today ? 'border-line-strong' : 'border-line',
               )}
             >
@@ -209,7 +224,7 @@ export function LifeSystem() {
               ) : d.day === today ? (
                 <span className="h-4" />
               ) : (
-                <X size={14} className="text-ink-faint" aria-hidden="true" />
+                <X size={14} className={state.lifeMissReasons?.[d.day] ? 'text-rose' : 'text-ink-faint'} aria-hidden="true" />
               )}
               <span className={cn('num text-[10px]', d.perfect ? 'font-semibold text-jade' : d.cleared ? 'text-arc-soft' : 'text-ink-muted')}>
                 {d.done}/{d.total}
@@ -224,9 +239,18 @@ export function LifeSystem() {
           <span className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-sm border border-arc-soft/70 bg-arc/30" aria-hidden="true" /> Cleared ({CLEAR_AT}+)
           </span>
+          <span>Click a missed day to see or record why.</span>
           <span>Personal tasks cleared before today’s update have no date, so they count for XP but not for past days.</span>
         </p>
+        {shown && (
+          <div>
+            <p className="mt-3 text-xs text-ink-muted">{formatDay(shown.day, today)} · {shown.done}/{shown.total} objectives</p>
+            <MissReasonNote key={shown.day} day={shown.day} failed scope="life" />
+          </div>
+        )}
       </Panel>
+
+      <MissBreakdownPanel scope="life" />
 
       <div className="grid gap-5 lg:grid-cols-12">
         <Panel className="lg:col-span-7" title={`Life achievements · ${life.achievements.filter((a) => a.earned).length}/${life.achievements.length}`}>

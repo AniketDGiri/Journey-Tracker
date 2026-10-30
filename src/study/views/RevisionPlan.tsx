@@ -5,7 +5,7 @@ import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
 import { planRevisions } from '../engine/actions';
 import { isLearned } from '../engine/revision';
-import { addDays, formatDay, shortWeekday, weekday } from '../lib/date';
+import { addDays, formatDay, formatDayInline, shortWeekday, weekday } from '../lib/date';
 import { cn } from '../lib/cn';
 import { Button, Panel, Segmented } from '../components/ui';
 import { DomainTag } from '../components/bits';
@@ -22,10 +22,7 @@ export function weekendDays(today: DayKey, weeks = WEEKENDS_AHEAD): DayKey[][] {
 }
 
 /** "2 days ago" reads lower-case mid-sentence; a calendar date ("Oct 22") keeps its capital. */
-const inline = (d: DayKey, today: DayKey) => {
-  const f = formatDay(d, today);
-  return /^[A-Z][a-z]{2} d/.test(f) ? f : f.toLowerCase();
-};
+const inline = formatDayInline;
 
 const fullDay = (d: DayKey, today: DayKey) => `${shortWeekday(d)} ${formatDay(d)}${d === today ? ' · today' : ''}`;
 

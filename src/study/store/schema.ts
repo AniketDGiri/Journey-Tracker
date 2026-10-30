@@ -112,6 +112,7 @@ export function migrate(raw: unknown): AppState {
     achievements: (isObj(payload.achievements) ? payload.achievements : {}) as AppState['achievements'],
     questPlan: cleanQuestPlan(payload.questPlan),
     missReasons: cleanMissReasons(payload.missReasons),
+    lifeMissReasons: cleanMissReasons(payload.lifeMissReasons),
     settings: settings as AppState['settings'],
   };
 }
