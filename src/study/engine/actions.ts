@@ -30,6 +30,7 @@ import { BOSSES, bossReward, bossScore } from './bosses';
 import { syncPenalties } from './penalties';
 import type { Quest } from './quests';
 import { periodStart } from './plan';
+import { completionEvent, recentRecords, reconcileClaims, reverseXp, settleItem, tickEvent, withoutEvents } from './undo';
 
 /**
  * All state transitions live here as pure functions: (state, input, ctx) → state.
@@ -167,23 +168,54 @@ export function deriveStatus(status: ItemStatus, subItems: SubItem[] | undefined
   return status;
 }
 
-/** Stores the checklist only; callers decide the status (see deriveStatus). Goals on removed steps go too. */
+/**
+ * Stores the checklist; callers decide the status (see deriveStatus). Goals on removed steps go too,
+ * and a step that was unticked takes back the study record its tick wrote.
+ */
 export function setSubItems(state: AppState, id: string, subItems: SubItem[], ctx: Ctx): AppState {
   const it = findItem(state, id);
   const list = cleanSubItems(subItems, it.subItems, ctx.today);
   const kept = new Set(list.map((s) => s.id));
-  const next = replaceItem(state, { ...it, subItems: list, updatedAt: ctx.now });
-  return { ...next, goals: next.goals.filter((g) => g.itemId !== id || !g.subItemId || kept.has(g.subItemId)) };
+  const stillDone = new Map(list.map((s) => [s.id, s.done]));
+  let next = replaceItem(state, { ...it, subItems: list, updatedAt: ctx.now });
+  next = { ...next, goals: next.goals.filter((g) => g.itemId !== id || !g.subItemId || kept.has(g.subItemId)) };
+
+  const unticked = (it.subItems ?? []).filter((s) => s.done && stillDone.get(s.id) === false);
+  const events = unticked.flatMap((s) => tickEvent(state, id, s) ?? []);
+  if (!events.length) return next;
+  return reconcileClaims(withoutEvents(next, events.map((e) => e.id)), events.map((e) => e.date), ctx);
 }
 
-/** One-click tick from a list: stores it and applies the derived outcome (XP, first revision). */
+/**
+ * Puts an item back to the status `ev` moved it from, and takes back what the move earned.
+ * Only if nothing has changed it since; otherwise the later change stands.
+ */
+function revertCompletion(state: AppState, ev: ActivityEvent, ctx: Ctx): AppState {
+  const it = ev.itemId ? state.items.find((i) => i.id === ev.itemId) : undefined;
+  if (!it || !ev.from || !ev.status || it.status !== ev.status || ev.from === ev.status) return state;
+  const status = deriveStatus(ev.from, it.subItems);
+  let next = replaceItem(withoutEvents(state, [ev.id]), { ...it, status, hintsUsed: status === 'with-hints' ? true : it.hintsUsed, updatedAt: ctx.now });
+  next = settleItem(next, it.id, (x) => outcomeTarget(x, state.settings.xp), ctx);
+  return reconcileClaims(next, [ev.date], ctx);
+}
+
+/**
+ * One-click tick from a list: stores it and applies the derived outcome (XP, first revision).
+ * Unticking undoes it: the step's record goes, and if the checklist had finished the item, that
+ * completion (status, schedule, XP) is reverted. A completion you logged yourself is left alone.
+ */
 export function toggleSubItem(state: AppState, id: string, subId: string, ctx: Ctx): AppState {
   const it = findItem(state, id);
   const subItems = (it.subItems ?? []).map((s) => (s.id === subId ? { ...s, done: !s.done } : s));
   const ticked = subItems.find((s) => s.id === subId)?.done;
   const next = setSubItems(state, id, subItems, ctx);
+  if (!ticked) {
+    // Looked up before the step's own record goes: it may be the very tick that finished the item.
+    const done = isLearned(it) && !subItems.every((s) => s.done) ? completionEvent(state, id, it.status) : undefined;
+    return done?.subItemId ? revertCompletion(next, done, ctx) : next;
+  }
   const status = deriveStatus(it.status, subItems);
-  return logProgress(next, id, { status, practiced: !!ticked && !isLearned(it) && status === it.status }, ctx);
+  return logProgress(next, id, { status, subItemId: subId, practiced: !isLearned(it) && status === it.status }, ctx);
 }
 
 export function deleteItem(state: AppState, id: string): AppState {
@@ -230,7 +262,14 @@ export interface ProgressInput {
   rubric?: Record<string, boolean>;
   /** Force an activity entry even if nothing else changed (e.g. a re-solve). */
   practiced?: boolean;
+  /** Where the work came from, so deleting or unticking it can take its record back (engine/undo). */
+  subItemId?: string;
+  sessionId?: string;
 }
+
+/** Undoing a completion within this many days takes back its record and XP (today, or yesterday's late-night mistake). */
+const UNDO_DAYS = 1;
+const STUDY_TYPES = new Set<ActivityType>(['solve', 'learn', 'attempt', 'progress']);
 
 export function logProgress(state: AppState, id: string, input: ProgressInput, ctx: Ctx): AppState {
   const prev = findItem(state, id);
@@ -294,7 +333,26 @@ export function logProgress(state: AppState, id: string, input: ProgressInput, c
       difficulty: item.difficulty,
       minutes: minutes || undefined,
       label,
+      ...(statusChanged ? { from: prev.status } : {}),
+      ...(input.subItemId ? { subItemId: input.subItemId } : {}),
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     });
+  }
+
+  // Moved back (marked done or started, then undone): a recent record of it, and its XP, go too.
+  // A completion from longer ago is history and stays.
+  const since = addDays(ctx.today, -UNDO_DAYS);
+  if (isLearned(prev) && !isLearned(item)) {
+    const done = completionEvent(next, id, prev.status);
+    if (done && done.date >= since) {
+      const swept = recentRecords(next, id, since, 'completion');
+      next = settleItem(withoutEvents(next, swept.map((e) => e.id)), id, (it) => outcomeTarget(it, state.settings.xp), ctx);
+      next = reconcileClaims(next, swept.map((e) => e.date), ctx);
+    }
+  } else if (status === 'not-started' && prev.status !== 'not-started') {
+    const swept = recentRecords(next, id, since, 'attempt');
+    next = settleItem(withoutEvents(next, swept.map((e) => e.id)), id, (it) => outcomeTarget(it, state.settings.xp), ctx);
+    next = reconcileClaims(next, swept.map((e) => e.date), ctx);
   }
 
   const target = outcomeTarget(item, state.settings.xp);
@@ -472,6 +530,7 @@ export function finishSession(state: AppState, input: FinishSessionInput, ctx0: 
         minutes: duration,
         solveTimeMin: input.outcome === 'solved' ? duration : undefined,
         practiced: true,
+        sessionId: session.id,
       },
       ctx,
     );
@@ -489,6 +548,7 @@ export function finishSession(state: AppState, input: FinishSessionInput, ctx0: 
     topicId: input.topicId,
     minutes: duration,
     label: `${duration} min session${item ? ` · ${item.title}` : topicName ? ` · ${topicName}` : ''}`,
+    sessionId: session.id,
   });
   if (duration >= state.settings.minSessionMinutes) {
     next = grant(next, { type: 'session', ref: session.id, target: state.settings.xp.sessionComplete, reason: `Completed a ${duration}-minute session`, domain: input.domain }, ctx.today, ctx.now).state;
@@ -496,10 +556,24 @@ export function finishSession(state: AppState, input: FinishSessionInput, ctx0: 
   return { state: next, session };
 }
 
-/** Removes a mistaken entry from the time log. XP and activity history are kept, as with items. */
-export function deleteSession(state: AppState, id: string): AppState {
-  if (!state.sessions.some((s) => s.id === id)) throw new ActionError('That session no longer exists.');
-  return { ...state, sessions: state.sessions.filter((s) => s.id !== id) };
+/**
+ * Removes a mistaken entry from the time log, and with it what it wrote: its activity, its XP,
+ * its minutes on the item, and a completion it caused. Older sessions are matched by when they ended.
+ */
+export function deleteSession(state: AppState, id: string, ctx: Ctx): AppState {
+  const ses = state.sessions.find((s) => s.id === id);
+  if (!ses) throw new ActionError('That session no longer exists.');
+  const tagged = state.activity.filter((a) => a.sessionId === id);
+  const events = tagged.length ? tagged : state.activity.filter((a) => a.at === ses.endedAt && a.itemId === ses.itemId && (a.type === 'session' || STUDY_TYPES.has(a.type)));
+  let next: AppState = { ...state, sessions: state.sessions.filter((s) => s.id !== id) };
+  // A completion this session caused is reverted first, while its record still exists.
+  for (const ev of [...events].reverse()) next = revertCompletion(next, ev, ctx);
+  next = withoutEvents(next, events.map((e) => e.id));
+  if (ses.itemId) {
+    next = { ...next, items: next.items.map((i) => (i.id === ses.itemId ? { ...i, timeSpentMin: Math.max(0, i.timeSpentMin - ses.durationMin) } : i)) };
+  }
+  next = reverseXp(next, 'session', id, `Session removed · ${ses.durationMin} min`, ctx);
+  return reconcileClaims(next, [ses.date, ...events.map((e) => e.date)], ctx);
 }
 
 // ── Quests, bosses, achievements ─────────────────────────────────────────

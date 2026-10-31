@@ -70,3 +70,15 @@ export function migrateTask(task) {
     end: `${dueDate}T${endTime || startTime || '00:00'}`,
   }
 }
+
+/**
+ * Applies `fields` to a task, keeping `doneAt` (the day it was cleared) in step when it moves into or
+ * out of Done. The Daily Quest, Life XP and the achievements all read it, so every screen that moves a
+ * task goes through here instead of each remembering to stamp it. An explicit `doneAt` is respected.
+ */
+export function withDoneDay(task, fields, todayKey) {
+  const next = { ...task, ...fields }
+  if (!('section' in fields) || 'doneAt' in fields) return next
+  if (fields.section === 'done') return { ...next, doneAt: task.section === 'done' ? (task.doneAt ?? null) : todayKey }
+  return { ...next, doneAt: null }
+}

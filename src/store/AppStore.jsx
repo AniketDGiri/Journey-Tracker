@@ -5,7 +5,7 @@ import { format } from 'date-fns'
 import { auth, db, googleProvider } from '../firebase'
 import { uid } from '../utils/id'
 import { DEFAULT_TIME_CONFIG } from '../utils/timeBlocks'
-import { migrateTask } from '../utils/taskDates'
+import { migrateTask, withDoneDay } from '../utils/taskDates'
 
 /**
  * Auth plus the Personal and Time workspaces. Study data lives in the Ascend
@@ -142,8 +142,14 @@ export function AppStoreProvider({ children }) {
       signOut: () => firebaseSignOut(auth),
 
       personalTasks: data.personalTasks,
-      addPersonalTask: personal.add,
-      updatePersonalTask: personal.update,
+      // Moving a task in or out of Done stamps or clears the day it was cleared, from any screen.
+      addPersonalTask: (item) =>
+        personal.add(item.section === 'done' && !('doneAt' in item) ? { ...item, doneAt: dayKey(new Date()) } : item),
+      updatePersonalTask: (id, fields) =>
+        setData((p) => ({
+          ...p,
+          personalTasks: p.personalTasks.map((t) => (t.id === id ? withDoneDay(t, fields, dayKey(new Date())) : t)),
+        })),
       removePersonalTask: personal.remove,
       projects: data.projects,
       addProject: projects.add,

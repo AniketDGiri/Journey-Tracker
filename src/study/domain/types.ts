@@ -132,6 +132,12 @@ export interface ActivityEvent {
   itemId?: string;
   topicId?: string;
   status?: ItemStatus;
+  /** The item's status before this event moved it, so an undo can put it back (see engine/undo). */
+  from?: ItemStatus;
+  /** The checklist step whose tick produced this event. */
+  subItemId?: string;
+  /** The study session that produced this event. */
+  sessionId?: string;
   difficulty?: Difficulty;
   quality?: RecallQuality;
   minutes?: number;

@@ -271,7 +271,7 @@ export function StudyTime() {
   }
 
   const remove = (id: string) => {
-    act((s) => deleteSession(s, id), { success: 'Session removed from the log' });
+    act((s, ctx) => deleteSession(s, id, ctx), { success: 'Session removed from the log' });
     setConfirmId(undefined);
   };
 

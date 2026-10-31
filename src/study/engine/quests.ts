@@ -1,5 +1,5 @@
 import type { ActivityEvent, AppState, DayKey, Domain } from '../domain/types';
-import { addDays, diffDays, endOfMonth, startOfMonth, startOfWeek } from '../lib/date';
+import { addDays, diffDays, endOfMonth, startOfMonth, startOfWeek, weekday } from '../lib/date';
 import { grantedFor } from './progression';
 import { evaluateGoals } from './plan';
 import { JAVA_TRACK } from '../domain/catalog';
@@ -56,10 +56,14 @@ export function availableDailyQuests(state: AppState, today: DayKey): Quest[] {
   const t = state.settings.targets;
   const xp = state.settings.xp;
   const todays = state.activity.filter((a) => a.date === today);
+  // Weekends are for revision: new-study quests turn into optional bonuses.
+  const weekend = weekday(today) % 6 === 0;
   const mk = (q: Omit<Quest, 'ref' | 'claimed' | 'complete' | 'cadence' | 'reward'>): Quest => {
     const ref = `${q.id}:${today}`;
+    const weekendBonus = weekend && q.id !== 'daily-revise' && !q.bonus;
     return {
       ...q,
+      ...(weekendBonus && { bonus: true, detail: `Weekend bonus — weekends are for revision. ${q.detail}` }),
       ref,
       cadence: 'daily',
       reward: xp.dailyQuest,

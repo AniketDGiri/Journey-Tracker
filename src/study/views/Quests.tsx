@@ -135,6 +135,8 @@ function StatusLine({ quests, period }: { quests: Quest[]; period: keyof typeof 
   const done = doneOf(quests);
   const total = totalOf(quests);
   const unclaimed = quests.filter((q) => q.complete && !q.claimed).length;
+  if (!total && quests.length)
+    return <span className="text-ink-muted">Only bonus quests {when} — nothing required.{unclaimed ? ` ${unclaimed} ready to claim.` : ''}</span>;
   if (total && done === total)
     return <span className="text-jade">Every {kind} quest complete.{unclaimed ? ` ${unclaimed} reward${unclaimed > 1 ? 's' : ''} waiting to be claimed.` : ''}</span>;
   return (

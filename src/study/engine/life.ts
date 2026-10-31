@@ -184,7 +184,7 @@ function firstDay(state: AppState, tasks: PersonalTask[], today: DayKey): DayKey
     ...state.fitness.logs.map((l) => l.date),
     ...Object.keys(state.nutrition.days),
     ...state.nutrition.weights.map((w) => w.date),
-    ...tasks.map((t) => t.doneAt).filter((d): d is string => !!d),
+    ...tasks.filter((t) => t.section === 'done').map((t) => t.doneAt).filter((d): d is string => !!d),
   ].filter((d) => d <= today);
   const first = days.sort()[0] ?? today;
   // Bounded so a stray old date can't make every render walk years of days.
