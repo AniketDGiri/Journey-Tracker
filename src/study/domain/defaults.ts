@@ -1,4 +1,4 @@
-import type { AppState, Domain, Settings } from './types';
+import type { AppState, Domain, QuestDays, Settings } from './types';
 import { REAL_STARTER_DOMAINS, buildCatalog } from './catalog';
 import { emptyNutrition } from './nutrition';
 import { toDayKey } from '../lib/date';
@@ -13,6 +13,14 @@ import { toDayKey } from '../lib/date';
 export const SCHEMA_VERSION = 6;
 
 export const emptyFitness = (): AppState['fitness'] => ({ activePhaseId: 'phase-0', starts: {}, logs: [] });
+
+/** Weekdays for system design, weekends for DSA and Java (revisions are planned for weekends too). */
+export const DEFAULT_QUEST_DAYS: QuestDays = {
+  hld: [1, 2, 3, 4, 5],
+  lld: [1, 2, 3, 4, 5],
+  dsa: [0, 6],
+  java: [0, 6],
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   playerName: '',
@@ -42,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   targets: { dsaPerDay: 2, javaPerDay: 1, hldPerDay: 1, lldPerDay: 1, reviewsPerDay: 5, minutesPerDay: 120 },
   restDays: [],
+  questDays: DEFAULT_QUEST_DAYS,
   minSessionMinutes: 15,
   targetDate: '2027-03-31',
 };
@@ -64,6 +73,7 @@ export function createEmptyState(now: Date = new Date(), starterDomains: Domain[
     fitness: emptyFitness(),
     nutrition: emptyNutrition(),
     achievements: {},
+    backlogSince: toDayKey(now),
     settings: { ...structuredClone(DEFAULT_SETTINGS), penaltiesSince: toDayKey(now) },
   };
 }

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { Download, Upload } from 'lucide-react';
-import type { Settings as S, XpRules } from '../domain/types';
-import { DEFAULT_SETTINGS } from '../domain/defaults';
+import type { QuestDays, Settings as S, XpRules } from '../domain/types';
+import { DEFAULT_QUEST_DAYS, DEFAULT_SETTINGS } from '../domain/defaults';
+import { STUDY_TRACKS, type StudyTrack } from '../engine/quests';
 import { useStore } from '../store/AppStore';
 import { setRevisionMode, updateSettings, validateIntervals } from '../engine/actions';
 import { migrate, toExport } from '../store/schema';
@@ -28,6 +29,83 @@ const XP_FIELDS: [keyof XpRules, string][] = [
 ];
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** Monday first, the way a study week is planned. */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+const PER_DAY: Record<StudyTrack, { key: 'hldPerDay' | 'lldPerDay' | 'dsaPerDay' | 'javaPerDay'; unit: string }> = {
+  hld: { key: 'hldPerDay', unit: 'HLD' },
+  lld: { key: 'lldPerDay', unit: 'LLD' },
+  dsa: { key: 'dsaPerDay', unit: 'DSA' },
+  java: { key: 'javaPerDay', unit: 'Java' },
+};
+
+/** Which days each track's daily quest is set, and what a week of it adds up to. */
+function WeeklyRhythm({ settings: s, onChange }: { settings: S; onChange: (d: QuestDays) => void }) {
+  const toggle = (track: StudyTrack, day: number) => {
+    const cur = s.questDays[track];
+    onChange({ ...s.questDays, [track]: cur.includes(day) ? cur.filter((x) => x !== day) : [...cur, day].sort() });
+  };
+  // What each day of the week asks for, from the rhythm and the per-day targets.
+  const load = WEEK_ORDER.map((day) => {
+    const parts = STUDY_TRACKS.filter((t) => s.questDays[t.id].includes(day) && s.targets[PER_DAY[t.id].key] > 0).map((t) => `${s.targets[PER_DAY[t.id].key]} ${PER_DAY[t.id].unit}`);
+    return { day, parts, rest: s.restDays.includes(day) };
+  });
+  const onlyRest = STUDY_TRACKS.filter((t) => s.questDays[t.id].length > 0 && s.questDays[t.id].every((d) => s.restDays.includes(d)));
+  const never = STUDY_TRACKS.filter((t) => s.questDays[t.id].length === 0 && s.targets[PER_DAY[t.id].key] > 0);
+  return (
+    <Panel title="Weekly rhythm">
+      <p className="mb-3 text-[11px] text-ink-muted">
+        Which days each track gets a daily quest. Other days it stays off your list — but anything you do there still counts, and pays back that track’s backlog.
+      </p>
+      <div className="flex flex-col gap-2.5">
+        {STUDY_TRACKS.map((t) => (
+          <div key={t.id} className="flex flex-wrap items-center gap-2">
+            <span className="w-12 text-xs font-medium text-ink-soft">{t.label}</span>
+            <div className="flex flex-wrap gap-1" role="group" aria-label={`${t.label} quest days`}>
+              {WEEK_ORDER.map((i) => {
+                const on = s.questDays[t.id].includes(i);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggle(t.id, i)}
+                    className={cn('h-7 w-10 rounded-md border text-[11px]', on ? 'border-violet/50 bg-violet/15 text-violet-soft' : 'border-line-strong text-ink-faint hover:text-ink')}
+                  >
+                    {DAYS[i]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-lg border border-line bg-surface-2/40 p-3">
+        <p className="st-label mb-2">A week at a glance</p>
+        <ul className="grid gap-1 text-xs sm:grid-cols-2">
+          {load.map(({ day, parts, rest }) => (
+            <li key={day} className="flex gap-2">
+              <span className="w-9 text-ink-muted">{DAYS[day]}</span>
+              <span className={cn(parts.length && !rest ? 'text-ink-soft' : 'text-ink-faint')}>
+                {rest ? 'Rest day' : parts.length ? parts.join(' + ') : 'Free'}
+                {(day === 0 || day === 6) && !rest && ' + planned revisions'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {(onlyRest.length > 0 || never.length > 0) && (
+        <p className="mt-2 text-[11px] text-ember-soft">
+          {onlyRest.length > 0 && `${onlyRest.map((t) => t.label).join(', ')} only falls on rest days, so it’s never asked of you. `}
+          {never.length > 0 && `${never.map((t) => t.label).join(', ')} has no days — it won’t appear as a daily quest.`}
+        </p>
+      )}
+      <Button size="sm" variant="ghost" className="mt-2" onClick={() => onChange(DEFAULT_QUEST_DAYS)}>
+        Reset: weekdays system design, weekends DSA + Java
+      </Button>
+    </Panel>
+  );
+}
 
 export function Settings() {
   const { state, act, replace, startSample, startFresh, toast } = useStore();
@@ -119,10 +197,10 @@ export function Settings() {
         <div className="grid grid-cols-2 gap-4">
           {(
             [
-              ['dsaPerDay', 'DSA problems / day'],
-    ['javaPerDay', 'Java concepts / day'],
-              ['hldPerDay', 'HLD items / day'],
-              ['lldPerDay', 'LLD items / day'],
+              ['hldPerDay', 'HLD items / quest day'],
+              ['lldPerDay', 'LLD items / quest day'],
+              ['dsaPerDay', 'DSA problems / quest day'],
+              ['javaPerDay', 'Java concepts / quest day'],
               ['reviewsPerDay', 'Max revisions quest'],
             ] as const
           ).map(([k, label]) => (
@@ -178,6 +256,8 @@ export function Settings() {
           <p className="mt-2 text-[11px] text-ink-muted">Rest days never break your streak. Shields (1 per 7 active days, max 2) cover unplanned misses.</p>
         </div>
       </Panel>
+
+      <WeeklyRhythm settings={s} onChange={(questDays) => set({ questDays }, 'Weekly rhythm updated')} />
 
       <Panel title="Revision schedule">
         <Field label="How revision dates are set" hint={s.revisionMode === 'auto' ? 'Every learned item is scheduled on the interval ladder below.' : 'Nothing is scheduled for you. Pick what to revise, and when, in Quests → Revision plan.'}>

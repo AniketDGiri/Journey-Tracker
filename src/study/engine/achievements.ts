@@ -5,11 +5,12 @@ import type { StreakInfo } from './streak';
 import { MASTERED_ITEM, itemMastery } from './mastery';
 import { evaluateGoals } from './plan';
 import { levelInfo, totalXp } from './progression';
+import { cleanRuns, computeBacklog } from './backlog';
 
-export type AchievementGroup = 'Items' | 'Steps' | 'Revision' | 'Consistency' | 'Mastery' | 'Planning' | 'Time' | 'Quests & bosses';
+export type AchievementGroup = 'Items' | 'Steps' | 'Revision' | 'Consistency' | 'Mastery' | 'Planning' | 'Backlog' | 'Time' | 'Quests & bosses';
 
 /** Display order of the groups. */
-export const ACHIEVEMENT_GROUPS: AchievementGroup[] = ['Items', 'Steps', 'Revision', 'Consistency', 'Mastery', 'Planning', 'Time', 'Quests & bosses'];
+export const ACHIEVEMENT_GROUPS: AchievementGroup[] = ['Items', 'Steps', 'Revision', 'Consistency', 'Mastery', 'Planning', 'Backlog', 'Time', 'Quests & bosses'];
 
 export interface AchievementDef {
   id: string;
@@ -47,7 +48,10 @@ const mastered = (s: AppState, today: DayKey) => s.items.filter((i) => itemMaste
 
 const doneGoals = (s: AppState, today: DayKey) => evaluateGoals(s, today).filter((g) => g.status === 'done').length;
 
-const studyMinutes = (s: AppState) => s.sessions.reduce((n, x) => n + x.durationMin, 0);
+const backlogCleared = (s: AppState, today: DayKey) => computeBacklog(s, today).cleared.length;
+const backlogCategoriesCleared = (s: AppState, today: DayKey) => new Set(computeBacklog(s, today).cleared.map((e) => e.category)).size;
+
+const studyMinutes =(s: AppState) => s.sessions.reduce((n, x) => n + x.durationMin, 0);
 
 const claimed = (s: AppState, type: 'quest' | 'weekly') => s.xp.filter((x) => x.type === type).length;
 
@@ -223,6 +227,32 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'plan-1', name: 'Plan Made, Plan Done', description: 'Achieve a planned goal.', group: 'Planning', measure: ({ state, today }) => [doneGoals(state, today), 1] },
   { id: 'plan-10', name: 'On Plan', description: 'Achieve 10 planned goals.', group: 'Planning', reward: 2, measure: ({ state, today }) => [doneGoals(state, today), 10] },
   { id: 'plan-50', name: 'Plan Keeper', description: 'Achieve 50 planned goals.', group: 'Planning', reward: 4, measure: ({ state, today }) => [doneGoals(state, today), 50] },
+
+  // ── Backlog ────────────────────────────────────────────────────────────
+  { id: 'backlog-1', name: 'Debt Collector', description: 'Clear your first backlog item.', group: 'Backlog', measure: ({ state, today }) => [backlogCleared(state, today), 1] },
+  { id: 'backlog-10', name: 'Catching Up', description: 'Clear 10 backlog items.', group: 'Backlog', reward: 2, measure: ({ state, today }) => [backlogCleared(state, today), 10] },
+  { id: 'backlog-50', name: 'Books Balanced', description: 'Clear 50 backlog items.', group: 'Backlog', reward: 4, measure: ({ state, today }) => [backlogCleared(state, today), 50] },
+  {
+    id: 'backlog-all-kinds',
+    name: 'All Fronts',
+    description: 'Clear a daily quest, a planned task and a revision from the backlog.',
+    group: 'Backlog',
+    reward: 2,
+    measure: ({ state, today }) => [backlogCategoriesCleared(state, today), 3],
+  },
+  {
+    id: 'backlog-clean-slate',
+    name: 'Clean Slate',
+    description: 'Fall behind, then work your backlog all the way down to zero.',
+    group: 'Backlog',
+    reward: 2,
+    measure: ({ state, today }) => {
+      const b = computeBacklog(state, today);
+      return [b.cleared.length > 0 && b.open.length === 0 ? 1 : 0, 1];
+    },
+  },
+  { id: 'backlog-free-7', name: 'Nothing Owed', description: 'Go 7 days in a row without anything falling into the backlog.', group: 'Backlog', reward: 2, measure: ({ state, today }) => [cleanRuns(state, today).longest, 7] },
+  { id: 'backlog-free-30', name: 'Debt-Free Month', description: 'Go 30 days in a row without anything falling into the backlog.', group: 'Backlog', reward: 5, measure: ({ state, today }) => [cleanRuns(state, today).longest, 30] },
 
   // ── Time ───────────────────────────────────────────────────────────────
   { id: 'time-10h', name: 'Ten Hours In', description: 'Study for 10 hours in total.', group: 'Time', measure: ({ state }) => [Math.floor(studyMinutes(state) / 60), 10] },

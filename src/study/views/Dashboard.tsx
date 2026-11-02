@@ -4,6 +4,7 @@ import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
 import { recommend } from '../engine/recommend';
 import { dailyQuests, requiredOf, weeklyChallenges } from '../engine/quests';
+import { BacklogNudge } from './Backlog';
 import { ACHIEVEMENTS } from '../engine/achievements';
 import { addDays, diffDays, formatDay, startOfWeek } from '../lib/date';
 import { Button, Panel } from '../components/ui';
@@ -186,6 +187,9 @@ export function Dashboard() {
     <div className="grid gap-4 lg:grid-cols-12">
       <div className="empty:hidden lg:col-span-12">
         <MissedDayPrompt />
+      </div>
+      <div className="empty:hidden lg:col-span-12">
+        <BacklogNudge />
       </div>
       <div className="lg:col-span-4">
         <PlayerCard />

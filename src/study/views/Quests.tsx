@@ -2,7 +2,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Award, Check, ChevronLeft, ChevronRight, Crown, Flame, Lock, TriangleAlert, X } from 'lucide-react';
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
-import { availableDailyQuests, dailyQuests, missions, monthlyChallenges, requiredOf, weeklyChallenges, type Quest } from '../engine/quests';
+import { STUDY_TRACKS, availableDailyQuests, dailyQuests, focusOf, missions, monthlyChallenges, requiredOf, weeklyChallenges, type Quest } from '../engine/quests';
+import type { AppState } from '../domain/types';
 import { claimQuest, setQuestPlan } from '../engine/actions';
 import { bossStatuses } from '../engine/bosses';
 import { ACHIEVEMENTS, ACHIEVEMENT_GROUPS, evaluateAchievements } from '../engine/achievements';
@@ -13,20 +14,22 @@ import { Badge, Bar, Button, Panel, Ring, Segmented } from '../components/ui';
 import { QuestList } from '../components/progress';
 import { Planner } from '../components/planner';
 import { RevisionPlan } from './RevisionPlan';
+import { Backlog, BacklogNudge } from './Backlog';
+import { computeBacklog } from '../engine/backlog';
 import { DomainTag } from '../components/bits';
 import { PenaltyZone, SystemTag, SystemWindow } from '../components/system';
 import { atStakeToday, judgeDay, penaltiesActive, penaltyLog, penaltyZone, type PenaltyEntry } from '../engine/penalties';
 import { missLabel } from '../engine/missed';
 import { MissBreakdownPanel, MissReasonNote, MissedDayPrompt } from '../components/missed';
 
-type Tab = 'daily' | 'weekly' | 'monthly' | 'revise' | 'planner' | 'bosses' | 'achievements';
+type Tab = 'daily' | 'weekly' | 'monthly' | 'revise' | 'planner' | 'backlog' | 'bosses' | 'achievements';
 
-const TAB_KEY = 'ascend.quests.tab';
+const TAB_KEY ='ascend.quests.tab';
 
 function readTab(): Tab {
   try {
     const t = window.localStorage.getItem(TAB_KEY) as Tab | null;
-    return t && ['daily', 'weekly', 'monthly', 'revise', 'planner', 'bosses', 'achievements'].includes(t) ? t : 'daily';
+    return t && ['daily', 'weekly', 'monthly', 'revise', 'planner', 'backlog', 'bosses', 'achievements'].includes(t) ? t : 'daily';
   } catch {
     return 'daily';
   }
@@ -202,7 +205,17 @@ function HistoryStrip({ title, cells, note }: { title: string; cells: { key: str
 
 // ── Daily ───────────────────────────────────────────────────────────────
 
-function DailyTab() {
+/** "System design day (HLD · LLD)." — what the weekly rhythm sets for `day`. */
+function focusLine(state: AppState, day: string): string {
+  const f = focusOf(state, day);
+  const names = f.map((t) => STUDY_TRACKS.find((x) => x.id === t)!.label).join(' · ');
+  if (!f.length) return 'No study quests set today — revise what you planned, or rest.';
+  if (f.every((t) => t === 'hld' || t === 'lld')) return `System design day (${names}).`;
+  if (f.every((t) => t === 'dsa' || t === 'java')) return `DSA & Java day (${names}) — plus anything planned for revision.`;
+  return `Today: ${names}.`;
+}
+
+function DailyTab({ onBacklog }: { onBacklog: () => void }) {
   const { state, today, act } = useStore();
   const [day, setDay] = useState(today);
   const [editing, setEditing] = useState(false);
@@ -267,6 +280,7 @@ function DailyTab() {
         />
       )}
       <MissedDayPrompt />
+      <BacklogNudge onOpen={onBacklog} />
       {planning ? (
         <SystemWindow label="Choose daily quests">
           <SystemTag>DAILY QUEST · {formatDay(day, today).toUpperCase()}</SystemTag>
@@ -313,7 +327,7 @@ function DailyTab() {
         <QuestWindow
           tag="DAILY QUEST"
           title={day === today ? 'Sharpen the blade today' : `Daily quests · ${formatDay(day, today)}`}
-          subtitle="Complete them from what you log, then claim the reward. Resets at midnight."
+          subtitle={`${focusLine(state, day)} Complete them from what you log, then claim the reward. Resets at midnight.`}
           quests={chosen}
           day={isPast ? day : undefined}
           extra={
@@ -653,15 +667,23 @@ export function Quests() {
   const weekly = useMemo(() => weeklyChallenges(state, today), [state, today]);
   const monthly = useMemo(() => monthlyChallenges(state, today), [state, today]);
   const zone = useMemo(() => penaltyZone(state, today), [state, today]);
+  const backlog = useMemo(() => computeBacklog(state, today), [state, today]);
 
   const planner = (
     <Panel title="Planner — what you committed to and what you achieved" id="planner">
       <Planner />
     </Panel>
   );
-  if (!state.settings.gamification) return <div className="grid gap-4">{planner}</div>;
+  if (!state.settings.gamification)
+    return (
+      <div className="grid gap-4">
+        {planner}
+        <Backlog />
+      </div>
+    );
 
   const { level, streak } = derived;
+  const owed = backlog.open.length;
   const count = (qs: Quest[]) => `${doneOf(qs)}/${totalOf(qs)}`;
 
   return (
@@ -721,16 +743,18 @@ export function Quests() {
           { value: 'monthly', label: `Monthly · ${count(monthly)}` },
           { value: 'revise', label: 'Revision plan' },
           { value: 'planner', label: 'Planner' },
+          { value: 'backlog', label: owed ? `Backlog · ${owed}` : 'Backlog' },
           { value: 'bosses', label: 'Bosses & missions' },
           { value: 'achievements', label: 'Achievements' },
         ]}
       />
 
-      {tab === 'daily' && <DailyTab />}
+      {tab === 'daily' && <DailyTab onBacklog={() => setTab('backlog')} />}
       {tab === 'weekly' && <WeeklyTab />}
       {tab === 'monthly' && <MonthlyTab />}
       {tab === 'revise' && <RevisionPlan />}
       {tab === 'planner' && planner}
+      {tab === 'backlog' && <Backlog />}
       {tab === 'bosses' && <BossesTab />}
       {tab === 'achievements' && <AchievementsTab />}
     </div>

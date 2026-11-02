@@ -1,4 +1,5 @@
-import type { ActivityEvent, AppState, DayKey, Domain } from '../domain/types';
+import type { ActivityEvent, AppState, DayKey, Domain, QuestDays } from '../domain/types';
+import { DEFAULT_QUEST_DAYS } from '../domain/defaults';
 import { addDays, diffDays, endOfMonth, startOfMonth, startOfWeek, weekday } from '../lib/date';
 import { grantedFor } from './progression';
 import { evaluateGoals } from './plan';
@@ -33,6 +34,8 @@ export interface Quest {
   action?: QuestAction;
   /** Optional extra: claimable for XP, but never needed to finish the day and never penalised. */
   bonus?: boolean;
+  /** Daily quests: the work actually logged, uncapped (`progress` stops at the target). */
+  achieved?: number;
 }
 
 /** The quests that count toward finishing a day, week or month (bonus quests excluded). */
@@ -51,96 +54,116 @@ export function dailyQuests(state: AppState, day: DayKey): Quest[] {
   return plan ? all.filter((q) => plan.includes(q.id)) : all;
 }
 
-/** Every daily quest that could be set for `day`, chosen or not. */
+export type StudyTrack = keyof QuestDays;
+
+export const STUDY_TRACKS: { id: StudyTrack; quest: string; label: string }[] = [
+  { id: 'hld', quest: 'daily-hld', label: 'HLD' },
+  { id: 'lld', quest: 'daily-lld', label: 'LLD' },
+  { id: 'dsa', quest: 'daily-dsa', label: 'DSA' },
+  { id: 'java', quest: 'daily-java', label: 'Java' },
+];
+
+/** Whether `track`'s daily quest is set on `day` (Settings → Weekly rhythm). */
+export const scheduledOn = (state: AppState, track: StudyTrack, day: DayKey): boolean =>
+  (state.settings.questDays ?? DEFAULT_QUEST_DAYS)[track].includes(weekday(day));
+
+/** How many days in [from, to] the track is scheduled. */
+export function scheduledDays(state: AppState, track: StudyTrack, from: DayKey, to: DayKey): number {
+  let n = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)) if (scheduledOn(state, track, d)) n++;
+  return n;
+}
+
+/** The tracks whose quests are set on `day`, in display order. */
+export const focusOf = (state: AppState, day: DayKey): StudyTrack[] => STUDY_TRACKS.filter((t) => scheduledOn(state, t.id, day)).map((t) => t.id);
+
+/**
+ * Study work logged on `day` per track, counted the way the quests count it.
+ * Measured on every day — a day a track isn't scheduled still pays down its backlog.
+ */
+export function questWork(state: AppState, day: DayKey): Record<StudyTrack, number> {
+  const todays = state.activity.filter((a) => a.date === day);
+  const javaTopics = new Set(state.topics.filter((x) => x.track === JAVA_TRACK).map((x) => x.id));
+  const items = (pred: (a: ActivityEvent) => boolean) => distinct(todays.filter(pred), (e) => e.itemId);
+  return {
+    dsa: items((a) => a.domain === 'dsa' && a.type === 'solve'),
+    java: items((a) => !!a.topicId && javaTopics.has(a.topicId) && PRACTICE_TYPES.has(a.type)),
+    hld: items((a) => a.domain === 'hld' && PRACTICE_TYPES.has(a.type)),
+    lld: items((a) => a.domain === 'lld' && PRACTICE_TYPES.has(a.type)),
+  };
+}
+
+/** Every daily quest that could be set for `day`, chosen or not. Tracks not scheduled for the day are left out. */
 export function availableDailyQuests(state: AppState, today: DayKey): Quest[] {
   const t = state.settings.targets;
   const xp = state.settings.xp;
   const todays = state.activity.filter((a) => a.date === today);
-  // Weekends are for revision: new-study quests turn into optional bonuses.
-  const weekend = weekday(today) % 6 === 0;
+  const work = questWork(state, today);
+  const on = (track: StudyTrack) => scheduledOn(state, track, today);
   const mk = (q: Omit<Quest, 'ref' | 'claimed' | 'complete' | 'cadence' | 'reward'>): Quest => {
     const ref = `${q.id}:${today}`;
-    const weekendBonus = weekend && q.id !== 'daily-revise' && !q.bonus;
     return {
       ...q,
-      ...(weekendBonus && { bonus: true, detail: `Weekend bonus — weekends are for revision. ${q.detail}` }),
       ref,
       cadence: 'daily',
       reward: xp.dailyQuest,
       complete: q.progress >= q.target,
       claimed: grantedFor(state, 'quest', ref) > 0,
       progress: Math.min(q.progress, q.target),
+      achieved: q.progress,
     };
   };
 
   const quests: Quest[] = [];
-  if (t.dsaPerDay > 0) {
-    const solved = distinct(
-      todays.filter((a) => a.domain === 'dsa' && a.type === 'solve'),
-      (e) => e.itemId,
+  if (t.hldPerDay > 0 && on('hld')) {
+    quests.push(
+      mk({
+        id: 'daily-hld',
+        domain: 'hld',
+        title: t.hldPerDay > 1 ? `Advance ${t.hldPerDay} system design concepts or exercises` : 'Advance one system design concept or exercise',
+        detail: 'Learn a concept or move a design through its rubric.',
+        progress: work.hld,
+        target: t.hldPerDay,
+        action: { type: 'log', domain: 'hld' },
+      }),
     );
+  }
+  if (t.lldPerDay > 0 && on('lld')) {
+    quests.push(
+      mk({
+        id: 'daily-lld',
+        domain: 'lld',
+        title: t.lldPerDay > 1 ? `Implement or study ${t.lldPerDay} LLD items` : 'Implement or study one LLD item',
+        detail: 'A pattern, a principle, or a machine-coding step.',
+        progress: work.lld,
+        target: t.lldPerDay,
+        action: { type: 'log', domain: 'lld' },
+      }),
+    );
+  }
+  if (t.dsaPerDay > 0 && on('dsa')) {
     quests.push(
       mk({
         id: 'daily-dsa',
         domain: 'dsa',
         title: `Solve ${t.dsaPerDay} DSA problem${t.dsaPerDay > 1 ? 's' : ''}`,
         detail: 'Independent or with hints — log the outcome honestly.',
-        progress: solved,
+        progress: work.dsa,
         target: t.dsaPerDay,
         action: { type: 'log', domain: 'dsa' },
       }),
     );
   }
-  const javaTopics = new Set(state.topics.filter((x) => x.track === JAVA_TRACK).map((x) => x.id));
-  if ((t.javaPerDay ?? 0) > 0 && javaTopics.size) {
-    const n = distinct(
-      todays.filter((a) => a.topicId && javaTopics.has(a.topicId) && PRACTICE_TYPES.has(a.type)),
-      (e) => e.itemId,
-    );
+  if ((t.javaPerDay ?? 0) > 0 && on('java') && state.topics.some((x) => x.track === JAVA_TRACK)) {
     quests.push(
       mk({
         id: 'daily-java',
         domain: 'dsa',
-        bonus: true,
         title: `Study ${t.javaPerDay} Java concept${t.javaPerDay > 1 ? 's' : ''}`,
-        detail: 'Optional bonus. Learn it, write a small program with it, log the outcome.',
-        progress: n,
+        detail: 'Learn it, write a small program with it, log the outcome.',
+        progress: work.java,
         target: t.javaPerDay,
         action: { type: 'navigate', to: 'dsa' },
-      }),
-    );
-  }
-  if (t.hldPerDay > 0) {
-    const n = distinct(
-      todays.filter((a) => a.domain === 'hld' && PRACTICE_TYPES.has(a.type)),
-      (e) => e.itemId,
-    );
-    quests.push(
-      mk({
-        id: 'daily-hld',
-        domain: 'hld',
-        title: 'Advance one system design concept or exercise',
-        detail: 'Learn a concept or move a design through its rubric.',
-        progress: n,
-        target: t.hldPerDay,
-        action: { type: 'log', domain: 'hld' },
-      }),
-    );
-  }
-  if (t.lldPerDay > 0) {
-    const n = distinct(
-      todays.filter((a) => a.domain === 'lld' && PRACTICE_TYPES.has(a.type)),
-      (e) => e.itemId,
-    );
-    quests.push(
-      mk({
-        id: 'daily-lld',
-        domain: 'lld',
-        title: 'Implement or study one LLD item',
-        detail: 'A pattern, a principle, or a machine-coding step.',
-        progress: n,
-        target: t.lldPerDay,
-        action: { type: 'log', domain: 'lld' },
       }),
     );
   }
@@ -187,11 +210,16 @@ export function weeklyChallenges(state: AppState, today: DayKey): Quest[] {
       progress: Math.min(q.progress, q.target),
     };
   };
+  // Sized from the weekly rhythm: half of the week's DSA quota, 1 to 4.
+  const dsaWeek = state.settings.targets.dsaPerDay * scheduledDays(state, 'dsa', ws, we);
+  const hardTarget = Math.min(4, Math.max(1, Math.round(dsaWeek / 2)));
+  // Hand-planned revisions happen on fewer days than ladder-driven ones.
+  const recallTarget = state.settings.revisionMode === 'auto' ? 15 : 10;
   return [
     mk({
       id: 'weekly-hard',
       domain: 'dsa',
-      title: 'Solve 4 medium/hard problems independently',
+      title: `Solve ${hardTarget} medium/hard problem${hardTarget > 1 ? 's' : ''} independently`,
       detail: 'No hints. Proves pattern recognition under pressure.',
       progress: distinct(
         inWeek.filter(
@@ -199,7 +227,7 @@ export function weeklyChallenges(state: AppState, today: DayKey): Quest[] {
         ),
         (e) => e.itemId,
       ),
-      target: 4,
+      target: hardTarget,
       action: { type: 'log', domain: 'dsa' },
     }),
     mk({
@@ -218,10 +246,10 @@ export function weeklyChallenges(state: AppState, today: DayKey): Quest[] {
     }),
     mk({
       id: 'weekly-recall',
-      title: 'Land 15 successful recalls',
+      title: `Land ${recallTarget} successful recalls`,
       detail: 'Spaced repetition is where knowledge sticks.',
       progress: inWeek.filter((a) => a.type === 'review' && a.quality === 'success').length,
-      target: 15,
+      target: recallTarget,
       action: { type: 'revise' },
     }),
     mk({
@@ -254,7 +282,8 @@ export function monthlyChallenges(state: AppState, today: DayKey): Quest[] {
       progress: Math.min(q.progress, q.target),
     };
   };
-  const dsaTarget = Math.max(10, t.dsaPerDay * 10);
+  // Three quarters of the month's scheduled DSA quota: a stretch, with room for an off weekend.
+  const dsaTarget = Math.max(5, Math.round(t.dsaPerDay * scheduledDays(state, 'dsa', ms, me) * 0.75));
   const hoursTarget = Math.max(10, Math.round((t.minutesPerDay * 20) / 60));
   const minutes = state.sessions.filter((s) => s.date >= ms && s.date <= me).reduce((n, s) => n + s.durationMin, 0);
   const goalsDone = evaluateGoals(state, today).filter((g) => g.status === 'done' && g.completedOn && g.completedOn >= ms && g.completedOn <= me).length;

@@ -1,8 +1,8 @@
-import type { AppState, Goal, MissReasonKind, SubItem } from '../domain/types';
-import { DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } from '../domain/defaults';
+import type { AppState, Goal, MissReasonKind, QuestDays, SubItem } from '../domain/types';
+import { DEFAULT_QUEST_DAYS, DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } from '../domain/defaults';
 import { javaTrack } from '../domain/catalog';
 import { emptyNutrition } from '../domain/nutrition';
-import { isDayKey, toDayKey } from '../lib/date';
+import { addDays, isDayKey, toDayKey } from '../lib/date';
 
 /** Validation + migration for persisted and imported data. */
 
@@ -42,6 +42,8 @@ export function migrate(raw: unknown): AppState {
     targetDate: isDayKey(settingsIn.targetDate) ? settingsIn.targetDate : DEFAULT_SETTINGS.targetDate,
     // Penalties arrived later: an existing journey is judged only from the day it first loads with them.
     penaltiesSince: isDayKey(settingsIn.penaltiesSince) ? settingsIn.penaltiesSince : toDayKey(new Date()),
+    // The weekly rhythm arrived later: anything missing takes the default (weekdays system design, weekends DSA + Java).
+    questDays: cleanQuestDays(settingsIn.questDays),
   };
   // v2 → v3: the 3h study-time default briefly shipped; 2h is the intended daily minimum.
   if (version < 3 && settings.targets.minutesPerDay === 180) settings.targets = { ...settings.targets, minutesPerDay: DEFAULT_SETTINGS.targets.minutesPerDay };
@@ -113,8 +115,32 @@ export function migrate(raw: unknown): AppState {
     questPlan: cleanQuestPlan(payload.questPlan),
     missReasons: cleanMissReasons(payload.missReasons),
     lifeMissReasons: cleanMissReasons(payload.lifeMissReasons),
+    // The backlog arrived later: an existing journey looks back two weeks (never before penalties began).
+    backlogSince: isDayKey(payload.backlogSince) ? payload.backlogSince : latest(settings.penaltiesSince, addDays(toDayKey(new Date()), -BACKLOG_LOOKBACK)),
+    backlogWaived: cleanWaived(payload.backlogWaived),
     settings: settings as AppState['settings'],
   };
+}
+
+function cleanQuestDays(v: unknown): QuestDays {
+  const days = (x: unknown, fallback: number[]) =>
+    Array.isArray(x) ? [...new Set(x.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort() : fallback;
+  const o = isObj(v) ? v : {};
+  return {
+    hld: days(o.hld, DEFAULT_QUEST_DAYS.hld),
+    lld: days(o.lld, DEFAULT_QUEST_DAYS.lld),
+    dsa: days(o.dsa, DEFAULT_QUEST_DAYS.dsa),
+    java: days(o.java, DEFAULT_QUEST_DAYS.java),
+  };
+}
+
+const BACKLOG_LOOKBACK = 14;
+const latest = (a: string, b: string) => (a > b ? a : b);
+
+function cleanWaived(v: unknown): AppState['backlogWaived'] {
+  if (!isObj(v)) return undefined;
+  const out = Object.fromEntries(Object.entries(v).filter(([, d]) => isDayKey(d))) as Record<string, string>;
+  return Object.keys(out).length ? out : undefined;
 }
 
 function cleanQuestPlan(v: unknown): Record<string, string[]> | undefined {

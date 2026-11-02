@@ -56,7 +56,7 @@ export function applyRecall(review: ReviewState, quality: RecallQuality, today: 
     planned: undefined,
     successCount: base.successCount + (quality === 'success' ? 1 : 0),
     lapseCount: base.lapseCount + (quality === 'fail' ? 1 : 0),
-    history: [...base.history, { date: today, quality, interval }].slice(-50),
+    history: [...base.history, { date: today, quality, interval, ...(review.nextReviewAt && { dueAt: review.nextReviewAt }) }].slice(-50),
   };
 }
 

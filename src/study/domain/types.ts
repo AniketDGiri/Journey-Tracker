@@ -28,6 +28,8 @@ export interface ReviewEntry {
   quality: RecallQuality;
   /** Interval (days) scheduled as a result. */
   interval: number;
+  /** The day the revision was due; later than that means it was caught up from the backlog. */
+  dueAt?: DayKey;
 }
 
 export interface ReviewState {
@@ -227,6 +229,14 @@ export interface XpRules {
   achievement: number;
 }
 
+/** Days (0 = Sunday … 6 = Saturday) each track's daily quest is set. */
+export interface QuestDays {
+  hld: number[];
+  lld: number[];
+  dsa: number[];
+  java: number[];
+}
+
 export interface Settings {
   playerName: string;
   gamification: boolean;
@@ -251,6 +261,8 @@ export interface Settings {
   };
   /** 0 = Sunday … 6 = Saturday. Planned rest days never break a streak. */
   restDays: number[];
+  /** The weekly rhythm: which weekdays each study track gets its daily quest. */
+  questDays: QuestDays;
   /** Minimum minutes for a session to earn XP. */
   minSessionMinutes: number;
   /** The day the preparation journey should be finished by. */
@@ -286,6 +298,10 @@ export interface AppState {
   missReasons?: Record<DayKey, MissReason>;
   /** The same, for the Life Daily Quest (training, nutrition, side quests). */
   lifeMissReasons?: Record<DayKey, MissReason>;
+  /** Backlog is tracked from this day on (see engine/backlog). */
+  backlogSince?: DayKey;
+  /** Backlog entries the player wrote off: entry key → day. */
+  backlogWaived?: Record<string, DayKey>;
   settings: Settings;
 }
 

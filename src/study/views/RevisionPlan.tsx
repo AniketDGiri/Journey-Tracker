@@ -12,6 +12,8 @@ import { DomainTag } from '../components/bits';
 import { SystemTag, SystemWindow } from '../components/system';
 
 const WEEKENDS_AHEAD = 4;
+/** More revisions than this on one day, next to that day's DSA and Java, starts to feel like a slog. */
+const HEAVY_DAY = 6;
 
 /** Saturdays and Sundays from today on, `weeks` weekends' worth. Today counts when it is a weekend day. */
 export function weekendDays(today: DayKey, weeks = WEEKENDS_AHEAD): DayKey[][] {
@@ -84,9 +86,9 @@ export function RevisionPlan() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <SystemTag>REVISION PLAN</SystemTag>
-            <h2 className="mt-2 text-lg font-semibold">Weekdays to learn, weekends to revise</h2>
+            <h2 className="mt-2 text-lg font-semibold">Revise on weekends, a little at a time</h2>
             <p className="mt-1 text-sm text-ink-soft">
-              Pick what you’ve completed and set the weekend day you’ll revise it. Planned days get a revision quest; weekdays stay free for new work.
+              Pick what you’ve completed and the weekend day you’ll revise it. Weekends also carry DSA and Java, so keep each day light — about {HEAVY_DAY} items — and spread the rest to the next weekend.
             </p>
           </div>
           <dl className="flex gap-6">
@@ -111,7 +113,10 @@ export function RevisionPlan() {
                   <div key={d} className="mt-2">
                     <p className="flex items-center justify-between text-xs">
                       <span className={cn('font-medium', d === today ? 'text-arc-soft' : 'text-ink')}>{fullDay(d, today)}</span>
-                      <span className="num text-ink-muted">{items.length}</span>
+                      <span className={cn('num', items.length > HEAVY_DAY ? 'text-ember-soft' : 'text-ink-muted')} title={items.length > HEAVY_DAY ? 'A heavy day — consider moving some to the next weekend' : undefined}>
+                        {items.length}
+                        {items.length > HEAVY_DAY && ' · heavy'}
+                      </span>
                     </p>
                     {items.length ? (
                       <ul className="mt-1 flex flex-col gap-1">
