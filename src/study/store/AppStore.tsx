@@ -8,8 +8,9 @@ import { computeTopicStats, type TopicStats } from '../engine/mastery';
 import { computeStreak, type StreakInfo } from '../engine/streak';
 import { levelInfo, totalXp, type LevelInfo } from '../engine/progression';
 import { revisionQueues, type RevisionQueues } from '../engine/revision';
-import { LocalStorageAdapter, type StorageAdapter } from './storage';
+import { ConflictError, LocalStorageAdapter, type StorageAdapter } from './storage';
 import { migrate } from './schema';
+import { acknowledged, rebase, type Pending } from './sync';
 
 export interface Toast {
   id: number;
@@ -48,7 +49,7 @@ interface Store {
 const StoreCtx = createContext<Store | null>(null);
 
 export function AppStoreProvider({ children, adapter }: { children: ReactNode; adapter?: StorageAdapter }) {
-  const storage = useMemo(() => adapter ?? new LocalStorageAdapter(), [adapter]);
+  const storage = useMemo<StorageAdapter>(() => adapter ?? new LocalStorageAdapter(), [adapter]);
   const [status, setStatus] = useState<Store['status']>('loading');
   const [loadError, setLoadError] = useState<string>();
   const [state, setState] = useState<AppState>(() => createEmptyState());
@@ -92,15 +93,48 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
     return () => window.clearInterval(t);
   }, []);
 
+  // Changes the server hasn't acknowledged. If another tab or device saved first, they are
+  // replayed on what it saved instead of overwriting it (or being lost).
+  const pendingRef = useRef<Pending[]>([]);
+  const seqRef = useRef(0);
+  const adoptRef = useRef<(raw: unknown) => void>(() => {});
+
   const persist = useCallback(
     (s: AppState) => {
+      const seq = seqRef.current;
       storage
         .save(s)
-        .then(() => setSaveError(undefined))
-        .catch((e: unknown) => setSaveError(e instanceof Error ? e.message : 'Could not save.'));
+        .then(() => {
+          pendingRef.current = acknowledged(pendingRef.current, seq);
+          setSaveError(undefined);
+        })
+        .catch((e: unknown) => {
+          if (e instanceof ConflictError) adoptRef.current(e.remote);
+          else setSaveError(e instanceof Error ? e.message : 'Could not save.');
+        });
     },
     [storage],
   );
+
+  /** What another tab or device saved becomes the base; this tab's unsaved changes go on top. */
+  adoptRef.current = (raw) => {
+    if (!raw) return;
+    let remote: AppState;
+    try {
+      remote = migrate(raw);
+    } catch {
+      return;
+    }
+    const { state: next, kept, dropped } = rebase(remote, pendingRef.current);
+    pendingRef.current = kept;
+    stateRef.current = next;
+    setState(next);
+    if (kept.length) persist(next);
+    toast({
+      tone: 'info',
+      title: dropped ? `Synced with another device — ${dropped} change${dropped > 1 ? 's' : ''} made here no longer applied` : 'Updated from another device',
+    });
+  };
 
   const ctx = useCallback((): Ctx => {
     const now = new Date();
@@ -115,6 +149,7 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
         if (next === stateRef.current) return feedback;
         stateRef.current = next;
         setState(next);
+        pendingRef.current.push({ seq: ++seqRef.current, fn, ctx: c });
         persist(next);
         const g = next.settings.gamification;
         if (!opts?.silent) {
@@ -143,14 +178,34 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
     if (status === 'ready') act((s) => s, { silent: true });
   }, [status, today, act]);
 
+  // Other tabs and devices: pick up what they save, and write what is waiting when the page is hidden.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const stop = storage.subscribe?.((raw) => adoptRef.current(raw));
+    const flush = () => storage.flush?.();
+    const hide = () => document.visibilityState === 'hidden' && flush();
+    const online = () => pendingRef.current.length > 0 && persist(stateRef.current);
+    document.addEventListener('visibilitychange', hide);
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('online', online);
+    return () => {
+      stop?.();
+      document.removeEventListener('visibilitychange', hide);
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('online', online);
+    };
+  }, [status, storage, persist]);
+
   const replace = useCallback(
     (s: AppState, message?: string) => {
       stateRef.current = s;
       setState(s);
+      // Replacing everything (import, fresh start) is what was asked for: it wins over another device.
+      pendingRef.current.push({ seq: ++seqRef.current, fn: () => s, ctx: ctx() });
       persist(s);
       if (message) toast({ tone: 'success', title: message });
     },
-    [persist, toast],
+    [ctx, persist, toast],
   );
 
   const retrySave = useCallback(() => persist(stateRef.current), [persist]);

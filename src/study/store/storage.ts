@@ -6,8 +6,23 @@ import type { AppState } from '../domain/types';
  */
 export interface StorageAdapter {
   load(): Promise<unknown | null>;
+  /** Rejects with `ConflictError` when another tab or device saved since this one last looked. */
   save(state: AppState): Promise<void>;
   clear(): Promise<void>;
+  /** Writes anything still waiting, now — the page is being hidden or closed. */
+  flush?(): void;
+  /** Calls `onRemote` with the saved state whenever another tab or device saves. Returns the unsubscribe. */
+  subscribe?(onRemote: (raw: unknown) => void): () => void;
+}
+
+/** Another tab or device saved first: `remote` is what it saved, at revision `rev`. */
+export class ConflictError extends Error {
+  constructor(
+    public remote: unknown,
+    public rev: number,
+  ) {
+    super('Changed on another device.');
+  }
 }
 
 const KEY = 'ascend.state.v1';

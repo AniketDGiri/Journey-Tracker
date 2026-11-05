@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { format } from 'date-fns'
 import { auth, db, googleProvider } from '../firebase'
 import { uid } from '../utils/id'
 import { DEFAULT_TIME_CONFIG } from '../utils/timeBlocks'
 import { migrateTask, withDoneDay } from '../utils/taskDates'
+import { adoptRemote, changedFields } from '../utils/syncFields'
 
 /**
  * Auth plus the Personal and Time workspaces. Study data lives in the Ascend
@@ -92,7 +93,9 @@ export function AppStoreProvider({ children }) {
         try {
           const snap = await getDoc(userDocRef(u.uid))
           const d = snap.exists() ? snap.data() : {}
-          setData(fromDoc(d))
+          const loaded = fromDoc(d)
+          syncedRef.current = loaded
+          setData(loaded)
           setLegacyDays(legacyWonDays(d, dayKey(new Date())))
         } catch (err) {
           console.error('Firestore load error', err)
@@ -100,6 +103,7 @@ export function AppStoreProvider({ children }) {
         setDataLoaded(true)
       } else {
         setData(EMPTY)
+        syncedRef.current = null
         setLegacyDays([])
         setDataLoaded(false)
       }
@@ -107,17 +111,68 @@ export function AppStoreProvider({ children }) {
     })
   }, [])
 
+  // Each field as this tab last loaded or saved it. Only fields edited since are written, and
+  // only untouched fields follow another device, so a stale tab can't wipe what it never changed.
+  const syncedRef = useRef(null)
+  const dataRef = useRef(data)
+  dataRef.current = data
+
+  const writeChanged = useCallback(() => {
+    const uidNow = user?.uid
+    const synced = syncedRef.current
+    if (!uidNow || !synced) return
+    const current = dataRef.current
+    const changed = changedFields(FIELDS, current, synced)
+    if (!changed.length) return
+    const fields = Object.fromEntries(changed.map((f) => [f, current[f]]))
+    setDoc(userDocRef(uidNow), fields, { mergeFields: changed })
+      .then(() => {
+        syncedRef.current = { ...syncedRef.current, ...fields }
+      })
+      .catch((err) => console.error('Firestore save error', err))
+  }, [user])
+
   const debounceRef = useRef(null)
   useEffect(() => {
     if (!dataLoaded || !user) return
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      setDoc(userDocRef(user.uid), data, { mergeFields: FIELDS }).catch((err) =>
-        console.error('Firestore save error', err)
-      )
+      debounceRef.current = null
+      writeChanged()
     }, 600)
     return () => clearTimeout(debounceRef.current)
-  }, [data, user, dataLoaded])
+  }, [data, user, dataLoaded, writeChanged])
+
+  // Another tab or device saved, or this page is going away.
+  useEffect(() => {
+    if (!dataLoaded || !user) return
+    const stop = onSnapshot(
+      userDocRef(user.uid),
+      (snap) => {
+        if (!snap.exists() || snap.metadata.hasPendingWrites || !syncedRef.current) return
+        const adopted = adoptRemote(FIELDS, dataRef.current, syncedRef.current, fromDoc(snap.data()))
+        if (!adopted) return
+        syncedRef.current = adopted.synced
+        setData(adopted.data)
+      },
+      (err) => console.warn('Live sync paused', err)
+    )
+    const flush = () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+        writeChanged()
+      }
+    }
+    const hide = () => document.visibilityState === 'hidden' && flush()
+    document.addEventListener('visibilitychange', hide)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', hide)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [dataLoaded, user, writeChanged])
 
   const patch = useCallback((fields) => setData((p) => ({ ...p, ...fields })), [])
 
