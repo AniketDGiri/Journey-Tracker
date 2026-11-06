@@ -11,8 +11,14 @@ export interface StorageAdapter {
   clear(): Promise<void>;
   /** Writes anything still waiting, now — the page is being hidden or closed. */
   flush?(): void;
-  /** Calls `onRemote` with the saved state whenever another tab or device saves. Returns the unsubscribe. */
-  subscribe?(onRemote: (raw: unknown) => void): () => void;
+  /**
+   * Calls `onRemote` with the saved state whenever another tab or device saves, and `onRetired`
+   * when an old copy of the app saves to the retired document (entries after `since` are new).
+   * Returns the unsubscribe.
+   */
+  subscribe?(onRemote: (raw: unknown) => void, onRetired?: (raw: unknown, since: string) => void): () => void;
+  /** A message for the player from the last load, once. */
+  takeNotice?(): string | undefined;
 }
 
 /** Another tab or device saved first: `remote` is what it saved, at revision `rev`. */

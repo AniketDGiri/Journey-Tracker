@@ -10,7 +10,7 @@ import { levelInfo, totalXp, type LevelInfo } from '../engine/progression';
 import { revisionQueues, type RevisionQueues } from '../engine/revision';
 import { ConflictError, LocalStorageAdapter, type StorageAdapter } from './storage';
 import { migrate } from './schema';
-import { acknowledged, rebase, type Pending } from './sync';
+import { absorbLegacy, acknowledged, rebase, staleNotice, type Pending } from './sync';
 
 export interface Toast {
   id: number;
@@ -76,6 +76,8 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
         if (cancelled) return;
         if (raw) setState(migrate(raw));
         setStatus('ready');
+        const notice = storage.takeNotice?.();
+        if (notice) toast({ tone: 'info', title: notice });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -85,7 +87,7 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
     return () => {
       cancelled = true;
     };
-  }, [storage]);
+  }, [storage, toast]);
 
   // Day rollover.
   useEffect(() => {
@@ -98,6 +100,7 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
   const pendingRef = useRef<Pending[]>([]);
   const seqRef = useRef(0);
   const adoptRef = useRef<(raw: unknown) => void>(() => {});
+  const absorbRef = useRef<(raw: unknown, since: string) => void>(() => {});
 
   const persist = useCallback(
     (s: AppState) => {
@@ -134,6 +137,25 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
       tone: 'info',
       title: dropped ? `Synced with another device — ${dropped} change${dropped > 1 ? 's' : ''} made here no longer applied` : 'Updated from another device',
     });
+  };
+
+  /** An old copy of the app saved somewhere: keep anything new it logged, never its stale copy. */
+  absorbRef.current = (raw, since) => {
+    if (!raw) return;
+    let legacy: AppState;
+    try {
+      legacy = migrate(raw);
+    } catch {
+      return;
+    }
+    const fn = (s: AppState) => absorbLegacy(s, legacy, since).state;
+    const { state: next, added } = absorbLegacy(stateRef.current, legacy, since);
+    if (!added) return;
+    stateRef.current = next;
+    setState(next);
+    pendingRef.current.push({ seq: ++seqRef.current, fn, ctx: ctx() });
+    persist(next);
+    toast({ tone: 'info', title: staleNotice(added) });
   };
 
   const ctx = useCallback((): Ctx => {
@@ -181,7 +203,10 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
   // Other tabs and devices: pick up what they save, and write what is waiting when the page is hidden.
   useEffect(() => {
     if (status !== 'ready') return;
-    const stop = storage.subscribe?.((raw) => adoptRef.current(raw));
+    const stop = storage.subscribe?.(
+      (raw) => adoptRef.current(raw),
+      (raw, since) => absorbRef.current(raw, since),
+    );
     const flush = () => storage.flush?.();
     const hide = () => document.visibilityState === 'hidden' && flush();
     const online = () => pendingRef.current.length > 0 && persist(stateRef.current);

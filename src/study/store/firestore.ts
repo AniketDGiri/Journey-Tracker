@@ -2,6 +2,8 @@ import { doc, getDoc, onSnapshot, runTransaction, setDoc, type DocumentData } fr
 import { db } from '../../firebase';
 import type { AppState } from '../domain/types';
 import { ConflictError, type StorageAdapter } from './storage';
+import { migrate } from './schema';
+import { absorbLegacy, staleNotice } from './sync';
 
 /**
  * Syncs study state to the signed-in user's account. It lives in its own
@@ -14,7 +16,17 @@ import { ConflictError, type StorageAdapter } from './storage';
  * a revision number and only lands on top of the revision this tab last saw;
  * otherwise it is refused with a `ConflictError` and the store replays its
  * unsaved changes on what the other side saved (see store/sync).
+ *
+ * Copies of the app opened before that existed (a phone tab, a tab never
+ * reloaded) still overwrite `appData/ascend` with whatever stale copy they hold.
+ * So state now lives in `appData/ascend2`, which they don't know about. On the
+ * first load it starts from `appData/ascend`; after that, anything new an old
+ * copy saves there is folded in by id (store/sync `absorbLegacy`) and nothing
+ * it holds can overwrite this document.
  */
+const DOC = 'ascend2';
+const RETIRED = 'ascend';
+
 export class FirestoreAdapter implements StorageAdapter {
   private pending: AppState | null = null;
   private timer: number | undefined;
@@ -23,14 +35,17 @@ export class FirestoreAdapter implements StorageAdapter {
   private rev = 0;
   /** Tells this tab's own saves apart from another tab's in the live feed. */
   private readonly id = Math.random().toString(36).slice(2);
+  /** The retired document's last save already folded in. */
+  private seen = '';
+  private notice: string | undefined;
 
   constructor(
     private uid: string,
     private delayMs = 500,
   ) {}
 
-  private ref() {
-    return doc(db, 'users', this.uid, 'appData', 'ascend');
+  private ref(name = DOC) {
+    return doc(db, 'users', this.uid, 'appData', name);
   }
 
   private parse(data: DocumentData | undefined): unknown | null {
@@ -42,11 +57,38 @@ export class FirestoreAdapter implements StorageAdapter {
     return typeof data?.rev === 'number' ? data.rev : 0;
   }
 
+  private savedAt(data: DocumentData | undefined): string {
+    return typeof data?.savedAt === 'string' ? data.savedAt : '';
+  }
+
   async load(): Promise<unknown | null> {
-    const snap = await getDoc(this.ref());
-    if (!snap.exists()) return null;
-    this.rev = this.revOf(snap.data());
-    return this.parse(snap.data());
+    const [snap, old] = await Promise.all([getDoc(this.ref()), getDoc(this.ref(RETIRED))]);
+    const oldData = old.data();
+    const oldRaw = this.parse(oldData);
+    if (!snap.exists()) {
+      // First load on this version: carry everything over, and save it to the new document straight away.
+      this.seen = this.savedAt(oldData);
+      if (oldRaw) void this.save(migrate(oldRaw)).catch(() => {});
+      return oldRaw;
+    }
+    const data = snap.data();
+    this.rev = this.revOf(data);
+    this.seen = typeof data.legacySeen === 'string' ? data.legacySeen : '';
+    const raw = this.parse(data);
+    if (!raw || !oldRaw || this.savedAt(oldData) <= this.seen) return raw;
+    const { state, added } = absorbLegacy(migrate(raw), migrate(oldRaw), this.seen);
+    this.seen = this.savedAt(oldData);
+    if (!added) return raw;
+    this.notice = staleNotice(added);
+    void this.save(state).catch(() => {});
+    return state;
+  }
+
+  /** A message for the player from the last load, once. */
+  takeNotice(): string | undefined {
+    const n = this.notice;
+    this.notice = undefined;
+    return n;
   }
 
   /** Rapid actions coalesce into one write; every caller learns how it went. */
@@ -75,7 +117,7 @@ export class FirestoreAdapter implements StorageAdapter {
         // Someone else saved since this tab last looked: never write over it. (A newer revision
         // of our own — an earlier save whose reply got lost — is fine to build on.)
         if (remoteRev !== this.rev && data?.by !== this.id) throw new ConflictError(this.parse(data), remoteRev);
-        tx.set(this.ref(), { json: JSON.stringify(state), savedAt: new Date().toISOString(), rev: remoteRev + 1, by: this.id });
+        tx.set(this.ref(), { json: JSON.stringify(state), savedAt: new Date().toISOString(), rev: remoteRev + 1, by: this.id, legacySeen: this.seen });
         return remoteRev + 1;
       });
       waiters.forEach((w) => w.resolve());
@@ -85,14 +127,16 @@ export class FirestoreAdapter implements StorageAdapter {
         waiters.forEach((w) => w.reject(e));
         return;
       }
-      const err = new Error(e instanceof Error && /offline|network|unavailable/i.test(e.message) ? 'You appear to be offline.' : 'Could not sync to your account.');
-      waiters.forEach((w) => w.reject(err));
+      waiters.forEach((w) => w.reject(new Error(describe(e))));
     }
   }
 
-  /** Another tab or device saved: hand over what it saved. Our own saves are skipped. */
-  subscribe(onRemote: (raw: unknown) => void): () => void {
-    return onSnapshot(
+  /**
+   * Another tab or device saved: hand over what it saved (our own saves are skipped). An old
+   * copy of the app saving to the retired document is handed over separately, to fold in.
+   */
+  subscribe(onRemote: (raw: unknown) => void, onRetired?: (raw: unknown, since: string) => void): () => void {
+    const stop = onSnapshot(
       this.ref(),
       (snap) => {
         const data = snap.data();
@@ -104,10 +148,35 @@ export class FirestoreAdapter implements StorageAdapter {
       },
       (err) => console.warn('Live sync paused', err),
     );
+    const stopRetired = onSnapshot(
+      this.ref(RETIRED),
+      (snap) => {
+        const data = snap.data();
+        const at = this.savedAt(data);
+        if (!onRetired || !data || at <= this.seen) return;
+        const since = this.seen;
+        this.seen = at;
+        onRetired(this.parse(data), since);
+      },
+      (err) => console.warn('Live sync paused', err),
+    );
+    return () => {
+      stop();
+      stopRetired();
+    };
   }
 
   async clear(): Promise<void> {
-    await setDoc(this.ref(), { json: null, savedAt: new Date().toISOString(), rev: this.rev + 1, by: this.id });
+    await setDoc(this.ref(), { json: null, savedAt: new Date().toISOString(), rev: this.rev + 1, by: this.id, legacySeen: this.seen });
     this.rev += 1;
   }
+}
+
+/** The real reason a save failed, so a rules or network problem is visible rather than generic. */
+function describe(e: unknown): string {
+  const code = typeof e === 'object' && e && 'code' in e ? String((e as { code: unknown }).code) : '';
+  const msg = e instanceof Error ? e.message : '';
+  if (/offline|network|unavailable/i.test(code + msg)) return 'You appear to be offline.';
+  if (/permission/i.test(code)) return 'Your account isn’t allowed to save this (permission denied).';
+  return `Could not sync to your account${code ? ` (${code})` : ''}.`;
 }
