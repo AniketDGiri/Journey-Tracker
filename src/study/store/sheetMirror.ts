@@ -13,6 +13,7 @@ import { dayTotals } from '../engine/nutrition';
 import { getPhase } from '../engine/fitness';
 import { lifeSummary } from '../engine/life';
 import { toExport } from './schema';
+import { DOMAIN_NAMES, EFFORTS, itemLabels, OUTCOMES, PRIORITIES, RECALLS, slotsOf, STUDY_WHAT, TAB } from './sheetInbox';
 import { rankOf, type PersonalProject, type PersonalSection, type PersonalTask } from '../engine/sidequests';
 
 /**
@@ -28,13 +29,39 @@ export interface Table {
   name: string;
   header: string[];
   rows: Cell[][];
+  /** Checkbox columns. */
+  checks?: string[];
+  /** Dropdown columns with their choices. */
+  choices?: Record<string, string[]>;
+  /** Columns kept but hidden (row IDs the sheet sends back with an edit). */
+  hidden?: string[];
+  /** Columns you can change in the sheet; the app applies the change (store/sheetInbox). */
+  editable?: string[];
+  /** A helper tab nobody needs to see (dropdown lists). */
+  hideTab?: boolean;
+}
+
+/** A ✎ tab where you log things. The sheet creates it once and never clears what you write. */
+export interface InputTab {
+  name: string;
+  header: string[];
+  /** Shown as the tab's first-row notes: what each column wants. */
+  notes: Record<string, string>;
+  choices?: Record<string, string[]>;
+  /** Dropdowns fed from a range (lists too long to inline), e.g. every item. */
+  ranges?: Record<string, string>;
+  checks?: string[];
+  dates?: string[];
+  numbers?: Record<string, [number, number]>;
 }
 
 /** The Personal and Time workspaces (the legacy store). */
 export interface PersonalData {
   personalTasks?: PersonalTask[];
   personalSections?: PersonalSection[];
+  personalCategories?: string[];
   projects?: PersonalProject[];
+  timeConfig?: { startHour: number; endHour: number; interval: number };
   timeLog?: Record<string, { slots?: Record<string, { task?: string; urgent?: boolean | null; important?: boolean | null }>; happy?: string }>;
 }
 
@@ -43,6 +70,7 @@ export interface MirrorPayload {
   /** When this copy was built; the sheet ignores a push older than the last one it took. */
   generatedAt: Iso;
   tables: Table[];
+  inputs: InputTab[];
   backup: { day: DayKey; json: string };
 }
 
@@ -155,9 +183,13 @@ export function buildMirror(state: AppState, personal: PersonalData, today: DayK
       rows: newestFirst(state.activity, (a) => a.at).map((a) => [a.date, when(a.at), up(a.domain), a.type, a.label, itemTitle(a.itemId), topicName.get(a.topicId ?? '') ?? '', a.status ?? '', a.quality ?? '', a.minutes ?? '']),
     },
     {
-      name: 'Items',
-      header: ['Domain', 'Topic', 'Title', 'Kind', 'Difficulty', 'Status', 'Confidence', 'Minutes spent', 'Best solve (min)', 'Steps done', 'Next revision', 'Last revised', 'Revisions OK', 'Lapses', 'Tags', 'Link', 'Notes', 'Created', 'Updated'],
+      name: TAB.items,
+      choices: { 'Log now': OUTCOMES.map(([n]) => n) },
+      editable: ['Log now'],
+      hidden: ['ID'],
+      header: ['Log now', 'Domain', 'Topic', 'Title', 'Kind', 'Difficulty', 'Status', 'Confidence', 'Minutes spent', 'Best solve (min)', 'Steps done', 'Next revision', 'Last revised', 'Revisions OK', 'Lapses', 'Tags', 'Link', 'Notes', 'Created', 'Updated', 'ID'],
       rows: state.items.map((i) => [
+        '',
         up(i.domain),
         topicName.get(i.topicId) ?? '',
         i.title,
@@ -177,12 +209,17 @@ export function buildMirror(state: AppState, personal: PersonalData, today: DayK
         i.notes,
         when(i.createdAt),
         when(i.updatedAt),
+        i.id,
       ]),
     },
     {
-      name: 'Revisions due',
-      header: ['Status', 'Due', 'Days overdue', 'Domain', 'Topic', 'Item', 'Last revised', 'Revisions OK', 'Lapses'],
+      name: TAB.revisions,
+      choices: { 'Revise now': RECALLS.map(([n]) => n) },
+      editable: ['Revise now'],
+      hidden: ['ID'],
+      header: ['Revise now', 'Status', 'Due', 'Days overdue', 'Domain', 'Topic', 'Item', 'Last revised', 'Revisions OK', 'Lapses', 'ID'],
       rows: [...queues.overdue, ...queues.today, ...queues.upcoming].map((i) => [
+        '',
         dueBucket(i, today),
         i.review.nextReviewAt ?? '',
         daysOverdue(i, today) || '',
@@ -192,6 +229,7 @@ export function buildMirror(state: AppState, personal: PersonalData, today: DayK
         i.review.lastReviewedAt ?? '',
         i.review.successCount,
         i.review.lapseCount,
+        i.id,
       ]),
     },
     {
@@ -283,13 +321,16 @@ export function buildMirror(state: AppState, personal: PersonalData, today: DayK
       rows: newestFirst(state.nutrition.weights, (w) => w.date).map((w) => [w.date, w.kg]),
     },
     {
-      name: 'Personal tasks',
-      header: ['Title', 'Section', 'Rank', 'Priority', 'Effort', 'Category', 'Project', 'Start', 'End', 'Done on', 'Steps done', 'Notes'],
+      name: TAB.tasks,
+      checks: ['Done'],
+      editable: ['Done'],
+      hidden: ['ID'],
+      header: ['Done', 'Title', 'Section', 'Rank', 'Priority', 'Effort', 'Category', 'Project', 'Start', 'End', 'Done on', 'Steps done', 'Notes', 'ID'],
       rows: tasks.map((t) => {
         const section = personal.personalSections?.find((s) => s.id === t.section)?.name ?? t.section;
         const project = personal.projects?.find((p) => p.id === t.projectId)?.name ?? '';
         const steps = (t.subtasks ?? []) as { done?: boolean }[];
-        return [t.title, section, rankOf(t), t.priority ?? '', t.effort ?? '', t.category ?? '', project, (t.start ?? '').replace('T', ' '), (t.end ?? '').replace('T', ' '), t.doneAt ?? '', steps.length ? `${steps.filter((s) => s.done).length} of ${steps.length}` : '', t.notes ?? ''];
+        return [t.section === 'done', t.title, section, rankOf(t), t.priority ?? '', t.effort ?? '', t.category ?? '', project, (t.start ?? '').replace('T', ' '), (t.end ?? '').replace('T', ' '), t.doneAt ?? '', steps.length ? `${steps.filter((s) => s.done).length} of ${steps.length}` : '', t.notes ?? '', t.id];
       }),
     },
     {
@@ -314,8 +355,63 @@ export function buildMirror(state: AppState, personal: PersonalData, today: DayK
           return filled.map(([slot, s]) => [d, slot, s.task!.trim(), yes(s.urgent), yes(s.important), happy]);
         }),
     },
+    {
+      name: TAB.lists,
+      hideTab: true,
+      header: ['Item'],
+      rows: [...itemLabels(state).values()].sort((a, b) => a.localeCompare(b)).map((l) => [l]),
+    },
   ];
   return tables;
+}
+
+/** The ✎ tabs: where you log things in the sheet. The app applies each row (store/sheetInbox). */
+export function buildInputs(personal: PersonalData): InputTab[] {
+  const sections = (personal.personalSections ?? []).map((s) => s.name);
+  const slots = personal.timeConfig ? slotsOf(personal.timeConfig) : [];
+  const date = 'Leave empty for today. Never a future date.';
+  return [
+    {
+      name: TAB.studyLog,
+      header: ['Date', 'Item', 'Result', 'Minutes', 'Confidence', 'Note'],
+      notes: { Date: date, Item: 'Pick the problem, concept or design.', Result: 'What happened: attempted, done, or a revision.', Minutes: 'Optional: time spent.', Confidence: 'Optional: 1 (shaky) to 5 (solid).', Note: 'Optional.' },
+      choices: { Result: OUTCOMES.map(([n]) => n), Confidence: ['1', '2', '3', '4', '5'] },
+      ranges: { Item: `'${TAB.lists}'!A2:A` },
+      dates: ['Date'],
+      numbers: { Minutes: [0, 1440] },
+    },
+    {
+      name: TAB.studyTime,
+      header: ['Date', 'Domain', 'Item', 'Minutes', 'What you did', 'Note'],
+      notes: { Date: date, Domain: 'DSA, HLD or LLD (not needed when you pick an item).', Item: 'Optional: the item you worked on.', Minutes: 'Time studied.', 'What you did': 'Learned new, practised, solved or revised.', Note: 'Optional.' },
+      choices: { Domain: DOMAIN_NAMES.map(([n]) => n), 'What you did': STUDY_WHAT.map(([n]) => n) },
+      ranges: { Item: `'${TAB.lists}'!A2:A` },
+      dates: ['Date'],
+      numbers: { Minutes: [1, 1440] },
+    },
+    {
+      name: TAB.newTask,
+      header: ['Task', 'Section', 'Priority', 'Effort', 'Category', 'Due', 'Note'],
+      notes: { Task: 'What needs doing.', Section: 'Empty = To do.', Priority: 'Empty = Medium.', Effort: 'Empty = Medium.', Category: 'Optional.', Due: 'Optional due date.', Note: 'Optional.' },
+      choices: { Section: sections, Priority: PRIORITIES, Effort: EFFORTS, Category: personal.personalCategories ?? [] },
+      dates: ['Due'],
+    },
+    {
+      name: TAB.timeSlot,
+      header: ['Date', 'Slot', 'Task', 'Urgent', 'Important'],
+      notes: { Date: 'Leave empty for today.', Slot: 'The start of the slot.', Task: 'What you did then.', Urgent: 'Tick if it was urgent.', Important: 'Tick if it was important.' },
+      choices: { Slot: slots },
+      checks: ['Urgent', 'Important'],
+      dates: ['Date'],
+    },
+    {
+      name: TAB.weight,
+      header: ['Date', 'kg'],
+      notes: { Date: date, kg: 'Your weight in kg.' },
+      dates: ['Date'],
+      numbers: { kg: [25, 300] },
+    },
+  ];
 }
 
 /** The whole push: tables plus the raw data, which the sheet keeps as a daily backup. */
@@ -324,10 +420,11 @@ export function mirrorPayload(secret: string, state: AppState, personal: Persona
     secret,
     generatedAt: now.toISOString(),
     tables: buildMirror(state, personal, today, now),
+    inputs: buildInputs(personal),
     backup: {
       day: today,
       // One file both importers read: Settings → Import backup (study) and the Personal/Time header import.
-      json: JSON.stringify({ ...toExport(state), ...personal }),
+      json: JSON.stringify({ ...toExport(state), personalTasks: personal.personalTasks, personalSections: personal.personalSections, personalCategories: personal.personalCategories, projects: personal.projects, timeLog: personal.timeLog, timeConfig: personal.timeConfig }),
     },
   };
 }

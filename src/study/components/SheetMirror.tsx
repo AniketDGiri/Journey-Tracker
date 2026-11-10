@@ -3,11 +3,22 @@ import { Check, Copy, ExternalLink, RefreshCw, Sheet } from 'lucide-react';
 import type { AppState } from '../domain/types';
 import { useStore } from '../store/AppStore';
 import { isScriptUrl, mirrorPayload, pushMirror, type PersonalData } from '../store/sheetMirror';
+import { appliedIds, callSheet, markApplied, planEntry, type SheetEntry } from '../store/sheetInbox';
+import { sectionPatch, type PersonalTask } from '../engine/sidequests';
 import { updateSettings } from '../engine/actions';
 import { Button, Field, Panel } from './ui';
 import { useAppStore as useLegacyStore } from '../../store/AppStore';
 
-const useLegacy = useLegacyStore as unknown as () => PersonalData;
+/** The Personal/Time store: its data, and the calls sheet entries make on it. */
+interface Legacy extends PersonalData {
+  addPersonalTask: (t: Omit<PersonalTask, 'id'>) => void;
+  updatePersonalTask: (id: string, fields: Partial<PersonalTask>) => void;
+  setTimeSlot: (date: string, slot: string, fields: Record<string, unknown>) => void;
+}
+const useLegacy = useLegacyStore as unknown as () => Legacy;
+
+/** How often the app looks for things logged in the sheet while it is open and visible. */
+const PULL_MS = 60_000;
 
 /** Quiet time after the last change before the sheet is updated, so a burst of edits is one push. */
 const DEBOUNCE_MS = 20_000;
@@ -18,6 +29,10 @@ const LAST_OK = 'ascend.sheetMirror.lastOk';
 interface Status {
   phase: 'idle' | 'syncing' | 'ok' | 'error';
   lastOk?: string;
+  /** Last time the app checked the sheet for entries, and what it found. */
+  lastPull?: string;
+  pulled?: { applied: number; failed: number };
+  pullError?: string;
   error?: string;
 }
 let status: Status = { phase: 'idle', lastOk: read(LAST_OK) };
@@ -42,13 +57,15 @@ function read(key: string): string | undefined {
 
 /** Set by the watcher: pushes the current data now. */
 let syncNow: () => void = () => {};
+/** Set by the watcher: checks the sheet for entries now. */
+let pullNow: () => void = () => {};
 
 /**
  * Keeps the Google Sheet in step: pushes a fresh copy shortly after changes,
  * when the app opens, and when the tab is hidden. Renders nothing.
  */
 export function SheetMirrorWatcher() {
-  const { state, today, status: storeStatus } = useStore();
+  const { state, today, status: storeStatus, act, toast } = useStore();
   const legacy = useLegacy();
   const cfg = state.settings.sheetMirror;
   const latest = useRef({ state, today, legacy });
@@ -72,7 +89,7 @@ export function SheetMirrorWatcher() {
       dirty.current = false;
       setStatus({ phase: 'syncing', error: undefined });
       try {
-        const personal: PersonalData = { personalTasks: l.personalTasks, personalSections: l.personalSections, projects: l.projects, timeLog: l.timeLog };
+        const personal: PersonalData = { personalTasks: l.personalTasks, personalSections: l.personalSections, personalCategories: l.personalCategories, projects: l.projects, timeLog: l.timeLog, timeConfig: l.timeConfig };
         await pushMirror(c.url, mirrorPayload(c.secret, s as AppState, personal, t));
         const at = new Date().toISOString();
         try {
@@ -106,6 +123,94 @@ export function SheetMirrorWatcher() {
     const t = window.setTimeout(() => syncNow(), DEBOUNCE_MS);
     return () => window.clearTimeout(t);
   }, [key, state, legacy.personalTasks, legacy.projects, legacy.timeLog, legacy.personalSections]);
+
+  // ── The other way: things logged in the sheet ──
+  const pulling = useRef(false);
+  const device = useRef('');
+  useEffect(() => {
+    if (!key) return;
+    /** One entry → one app action. The applied mark rides in the same action, so it can't apply twice. */
+    const applyOne = (e: SheetEntry): { id: string; ok: boolean; message: string } => {
+      const { state: s, today: t, legacy: l } = latest.current;
+      if (appliedIds(s).has(e.id)) return { id: e.id, ok: true, message: 'Already applied' };
+      const mark = () => act((st) => markApplied(st, e.id), { silent: true });
+      let plan;
+      try {
+        plan = planEntry(e, s, l, t);
+      } catch (err) {
+        return { id: e.id, ok: false, message: err instanceof Error ? err.message : 'Could not read this entry.' };
+      }
+      if (!plan) {
+        mark();
+        return { id: e.id, ok: true, message: 'Nothing to change' };
+      }
+      if (plan.kind === 'study') {
+        const fn = plan.fn;
+        let failure: unknown;
+        const fb = act(
+          (st, c) => {
+            try {
+              return markApplied(fn(st, c), e.id);
+            } catch (err) {
+              failure = err;
+              throw err;
+            }
+          },
+          { silent: true },
+        );
+        if (!fb) return { id: e.id, ok: false, message: failure instanceof Error ? failure.message : 'The app could not apply this.' };
+      } else if (plan.kind === 'task-section') {
+        const task = l.personalTasks?.find((x) => x.id === plan.taskId);
+        if (!task) return { id: e.id, ok: false, message: 'That task no longer exists.' };
+        l.updatePersonalTask(task.id, sectionPatch(task, plan.section, t));
+        mark();
+      } else if (plan.kind === 'task-add') {
+        l.addPersonalTask(plan.task);
+        mark();
+      } else {
+        l.setTimeSlot(plan.date, plan.slot, plan.fields);
+        mark();
+      }
+      return { id: e.id, ok: true, message: plan.label };
+    };
+
+    const pull = async () => {
+      const { state: s } = latest.current;
+      const c = s.settings.sheetMirror;
+      if (pulling.current || document.visibilityState === 'hidden' || !c?.url || s.mode !== 'real') return;
+      pulling.current = true;
+      device.current ||= Math.random().toString(36).slice(2, 10);
+      try {
+        const { entries = [] } = await callSheet<{ entries?: SheetEntry[] }>(c.url, { secret: c.secret, op: 'pull', device: device.current });
+        const results = entries.map(applyOne);
+        if (results.length) await callSheet(c.url, { secret: c.secret, op: 'ack', results });
+        const applied = results.filter((r) => r.ok && r.message !== 'Already applied' && r.message !== 'Nothing to change').length;
+        const failed = results.filter((r) => !r.ok).length;
+        if (applied || failed)
+          toast({
+            tone: failed ? 'error' : 'success',
+            title: applied ? `Applied ${applied} change${applied > 1 ? 's' : ''} from your Google Sheet` : 'An entry in your Google Sheet couldn’t be applied',
+            detail: failed ? `${failed} couldn’t be applied — the sheet shows why next to each.` : undefined,
+          });
+        setStatus({ lastPull: new Date().toISOString(), pulled: { applied, failed }, pullError: undefined });
+      } catch (err) {
+        setStatus({ pullError: err instanceof Error ? err.message : 'Could not read the Google Sheet.' });
+      } finally {
+        pulling.current = false;
+      }
+    };
+    pullNow = () => void pull();
+    const first = window.setTimeout(pull, 3000);
+    const every = window.setInterval(pull, PULL_MS);
+    const back = () => document.visibilityState === 'visible' && void pull();
+    document.addEventListener('visibilitychange', back);
+    return () => {
+      pullNow = () => {};
+      window.clearTimeout(first);
+      window.clearInterval(every);
+      document.removeEventListener('visibilitychange', back);
+    };
+  }, [key, act, toast]);
 
   // Leaving the page: don't wait out the quiet spell.
   useEffect(() => {
@@ -155,7 +260,9 @@ export function SheetMirrorPanel() {
       <div className="flex flex-col gap-4">
         <p className="text-sm text-ink-soft">
           Keeps a read-only copy of everything — study, revisions, backlog, quests, XP, workouts, nutrition, personal tasks and the time log — in a Google Sheet, updated
-          automatically from any device. The sheet also keeps a daily backup of your raw data for the last 60 days.
+          automatically from any device. You can also log from the sheet: the ✎ tabs, the “Log now” and “Revise now” dropdowns, and the Done
+          boxes on personal tasks. The app applies them within a minute while it is open, with XP, quests and streaks as usual. The sheet also
+          keeps a daily backup of your raw data for the last 60 days.
         </p>
         <details className="rounded-lg border border-line bg-surface-2/50 p-3 text-sm text-ink-soft">
           <summary className="cursor-pointer font-medium text-ink">How to set it up (5 minutes, once)</summary>
@@ -194,7 +301,7 @@ export function SheetMirrorPanel() {
               <Sheet size={14} aria-hidden="true" /> Connect
             </Button>
           ) : (
-            <Button variant="secondary" disabled={st.phase === 'syncing' || state.mode !== 'real'} onClick={() => syncNow()}>
+            <Button variant="secondary" disabled={st.phase === 'syncing' || state.mode !== 'real'} onClick={() => (pullNow(), syncNow())}>
               <RefreshCw size={14} aria-hidden="true" className={st.phase === 'syncing' ? 'animate-spin' : undefined} /> Sync now
             </Button>
           )}
@@ -220,6 +327,13 @@ export function SheetMirrorPanel() {
                   : st.lastOk
                     ? `Sheet updated ${new Date(st.lastOk).toLocaleString()}. It updates by itself about 20 seconds after each change.`
                     : 'Waiting for the first update…'}
+          </p>
+        )}
+        {cfg && state.mode === 'real' && (st.lastPull || st.pullError) && (
+          <p className={st.pullError ? 'text-sm text-rose' : 'text-xs text-ink-muted'} role="status">
+            {st.pullError
+              ? `Reading entries from the sheet: ${st.pullError}`
+              : `Checked the sheet for new entries ${new Date(st.lastPull!).toLocaleTimeString()}${st.pulled?.applied ? ` — applied ${st.pulled.applied}` : ''}${st.pulled?.failed ? `, ${st.pulled.failed} couldn’t be applied` : ''}. It checks every minute while the app is open.`}
           </p>
         )}
       </div>
