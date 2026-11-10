@@ -27,6 +27,7 @@ import { Nutrition } from './views/Nutrition';
 import { Personal } from './views/Personal';
 import { LifeSystem } from './views/LifeSystem';
 import { LifeStrip, LifeWatcher } from './components/life';
+import { SheetMirrorWatcher } from './components/SheetMirror';
 import { cn } from './lib/cn';
 import type { User } from 'firebase/auth';
 // The Personal and Time workspaces are the original JS app, unchanged.
@@ -233,6 +234,7 @@ function Root({ theme, setTheme }: { theme: string; setTheme: (t: string) => voi
       <Sheets />
       <Toasts />
       <LifeWatcher />
+      <SheetMirrorWatcher />
     </>
   );
 }

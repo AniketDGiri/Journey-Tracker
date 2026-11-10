@@ -8,6 +8,7 @@ import { setRevisionMode, updateSettings, validateIntervals } from '../engine/ac
 import { migrate, toExport } from '../store/schema';
 import { Button, Field, Panel, Segmented, Toggle } from '../components/ui';
 import { cn } from '../lib/cn';
+import { SheetMirrorPanel } from '../components/SheetMirror';
 import { toDayKey } from '../lib/date';
 
 const XP_FIELDS: [keyof XpRules, string][] = [
@@ -349,6 +350,8 @@ export function Settings() {
         </div>
         <p className="mt-3 text-[11px] text-ink-muted">Changes apply to future rewards. Already-earned XP is never removed; raised values top up on the next qualifying update.</p>
       </Panel>
+
+      <SheetMirrorPanel />
 
       <Panel title="Data" className="lg:col-span-2">
         <div className="flex flex-col gap-5">

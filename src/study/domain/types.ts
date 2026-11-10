@@ -267,6 +267,8 @@ export interface Settings {
   minSessionMinutes: number;
   /** The day the preparation journey should be finished by. */
   targetDate: DayKey;
+  /** Read-only copy of the app in a Google Sheet (see store/sheetMirror). Absent = off. */
+  sheetMirror?: { url: string; secret: string };
 }
 
 export interface AppState {
