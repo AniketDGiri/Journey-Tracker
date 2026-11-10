@@ -2,6 +2,7 @@ import type { AppState, Goal, MissReasonKind, QuestDays, SubItem } from '../doma
 import { DEFAULT_QUEST_DAYS, DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } from '../domain/defaults';
 import { javaTrack } from '../domain/catalog';
 import { mergeAlgoCamp } from '../domain/algocamp';
+import { applyDsaPatterns } from '../domain/dsaPatterns';
 import { emptyNutrition } from '../domain/nutrition';
 import { addDays, isDayKey, toDayKey } from '../lib/date';
 
@@ -87,6 +88,14 @@ export function migrate(raw: unknown): AppState {
   // lecture steps; everything else is added. Once — later edits and deletions are respected.
   if (version < 7 && mode === 'real') {
     const merged = mergeAlgoCamp(topicList, itemList, new Date().toISOString());
+    topicList = merged.topics;
+    itemList = merged.items;
+  }
+
+  // v7 → v8: DSA by pattern. Topics become the sheet's patterns (old ones renamed or folded in),
+  // its problems are added as cards, and your own cards move with them. Once.
+  if (version < 8 && mode === 'real') {
+    const merged = applyDsaPatterns(topicList, itemList, new Date().toISOString());
     topicList = merged.topics;
     itemList = merged.items;
   }

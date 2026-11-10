@@ -38,10 +38,11 @@ export const BOSSES: BossDef[] = [
     id: 'boss-dsa-gate',
     domain: 'dsa',
     name: 'The Gatekeeper',
-    challenge: 'Pick an unseen medium array or hashing problem and solve it without hints.',
+    challenge: 'Pick an unseen medium two-pointer or hash map problem and solve it without hints.',
     timeLimitMin: 30,
     reward: 150,
-    requires: [{ topicId: 'dsa-arrays', mastery: 40 }, { topicId: 'dsa-hashing', mastery: 40 }],
+    // The DSA tree is by pattern now: Arrays is gone, Two Pointers takes its place.
+    requires: [{ topicId: 'dsa-two-pointers', mastery: 40 }, { topicId: 'dsa-hashing', mastery: 40 }],
     criteria: dsaCriteria(),
   },
   {
