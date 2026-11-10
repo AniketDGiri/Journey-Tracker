@@ -41,9 +41,9 @@ export function CountdownCard() {
       title="Journey countdown"
       className="relative h-full overflow-hidden"
       action={
-        <button className="text-xs text-ink-muted hover:text-ink" onClick={() => navigate('settings')}>
+        <Button variant="link" size="xs" className="-mr-2" onClick={() => navigate('settings')}>
           Change date
-        </button>
+        </Button>
       }
     >
       <div className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-arc/10 blur-3xl" aria-hidden="true" />
@@ -155,9 +155,9 @@ export function StudyTimeCard() {
       title="Study time"
       className="relative flex h-full flex-col overflow-hidden"
       action={
-        <button className="text-xs text-ink-muted hover:text-ink" onClick={() => navigate('sessions')}>
+        <Button variant="link" size="xs" className="-mr-2" onClick={() => navigate('sessions')}>
           Log time
-        </button>
+        </Button>
       }
     >
       <div className="pointer-events-none absolute -left-14 -top-14 h-40 w-40 rounded-full bg-jade/10 blur-3xl" aria-hidden="true" />

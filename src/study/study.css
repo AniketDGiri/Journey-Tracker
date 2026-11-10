@@ -67,6 +67,14 @@ dialog::backdrop {
   }
 }
 
+/* Fields default to the button height (40px) so a field and a button in one row line up.
+   :where() has no specificity, so a compact field's own h-8 / h-9 still wins, and textareas grow. */
+@layer components {
+  :where(input.st-input, select.st-input) {
+    height: 2.5rem;
+  }
+}
+
 /* In-app motion setting (the system preference is handled in index.css). */
 html.motion-off *,
 html.motion-off *::before,
@@ -74,6 +82,13 @@ html.motion-off *::after {
   animation-duration: 0.001ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
+}
+
+/* Dialogs fit the visible screen. dvh excludes a phone's address bar, which vh counts,
+   so the footer buttons never sit below the fold. vh is the fallback for older browsers. */
+.st-modal-h {
+  max-height: 92vh;
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 
 /* Grid children may shrink below their content (wide tables/heatmaps scroll inside). */

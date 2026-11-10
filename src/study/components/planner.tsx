@@ -389,9 +389,9 @@ export function TodayPlan() {
         <p className="st-label">
           My plan · {r.done}/{r.total}
         </p>
-        <button className="text-xs text-ink-muted hover:text-ink" onClick={() => navigate('quests')}>
+        <Button variant="link" size="xs" className="-mr-2" onClick={() => navigate('quests')}>
           Planner
-        </button>
+        </Button>
       </div>
       {views.length || missedRecent.length ? (
         <ul className="flex flex-col divide-y divide-line/60">

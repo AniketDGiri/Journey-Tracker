@@ -42,7 +42,7 @@ function NextAction() {
           {rec.cta} <ArrowRight size={14} aria-hidden="true" />
         </Button>
         {rec.action.type === 'log' && (
-          <Button variant="ghost" size="sm" onClick={() => open({ type: 'start-session', domain: rec.domain, itemId: rec.action.type === 'log' ? rec.action.itemId : undefined })}>
+          <Button variant="ghost" onClick={() => open({ type: 'start-session', domain: rec.domain, itemId: rec.action.type === 'log' ? rec.action.itemId : undefined })}>
             Start a timed session
           </Button>
         )}
@@ -63,9 +63,9 @@ function RevisionSummary() {
     <Panel
       title="Revision"
       action={
-        <button className="text-xs text-ink-muted hover:text-ink" onClick={() => navigate('revision')}>
+        <Button variant="link" size="xs" className="-mr-2" onClick={() => navigate('revision')}>
           View all
-        </button>
+        </Button>
       }
     >
       <dl className="grid grid-cols-3 gap-2 text-center">
@@ -216,9 +216,9 @@ export function Dashboard() {
         title={game ? `Today’s quests · ${doneCount}/${required.length}` : `Today’s plan · ${doneCount}/${required.length}`}
         action={
           game && (
-            <button className="text-xs text-ink-muted hover:text-ink" onClick={() => navigate('quests')}>
+            <Button variant="link" size="xs" className="-mr-2" onClick={() => navigate('quests')}>
               Weekly & bosses
-            </button>
+            </Button>
           )
         }
       >

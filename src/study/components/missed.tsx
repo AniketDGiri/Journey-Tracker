@@ -136,9 +136,9 @@ export function MissReasonNote({ day, failed, scope = 'study' }: { day: DayKey; 
           <span className="text-[11px] uppercase tracking-[0.12em] text-ink-muted">Why it was missed</span>
           <span className="rounded-full border border-rose/50 px-2.5 py-0.5 text-xs text-ink">{missLabel(r.reason)}</span>
           {r.note && <span className="min-w-0 flex-1 text-ink-soft">{r.note}</span>}
-          <button type="button" onClick={() => setEditing(true)} className="ml-auto inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink">
+          <Button variant="link" size="xs" className="-mr-2 ml-auto gap-1" onClick={() => setEditing(true)}>
             <Pencil size={12} aria-hidden="true" /> Edit
-          </button>
+          </Button>
         </div>
       ) : (
         <>

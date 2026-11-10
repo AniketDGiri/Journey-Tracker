@@ -1,42 +1,63 @@
 import { forwardRef, useEffect, useId, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { cn } from '../../lib/cn';
 
 // ── Button ──────────────────────────────────────────────────────────────
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'subtle';
+/**
+ * The one button. Sizes match the Personal/Time `.btn` classes (App.css --control-h*):
+ * md 40px, sm 32px, xs 28px, icon 36px. Labels never wrap; the button never shrinks in a row.
+ */
+type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'subtle' | 'danger' | 'link';
 const VARIANTS: Record<Variant, string> = {
   primary:
     'bg-violet text-white hover:bg-violet-soft hover:text-void shadow-[0_0_0_1px_rgba(167,139,250,0.4),0_8px_24px_-12px_rgba(139,92,246,0.8)]',
   secondary: 'border border-line-strong bg-surface-2 text-ink hover:border-violet/50 hover:bg-surface-3',
+  outline: 'border border-line-strong text-ink-soft hover:border-violet/50 hover:bg-surface-2 hover:text-ink',
   ghost: 'text-ink-soft hover:bg-surface-2 hover:text-ink',
   subtle: 'bg-surface-2 text-ink-soft hover:bg-surface-3 hover:text-ink',
   danger: 'border border-rose/40 bg-rose/10 text-rose hover:bg-rose/20',
+  // Quiet text action, e.g. a card header's "View all": looks like text, but has a real hit area.
+  link: 'text-ink-muted hover:bg-surface-2 hover:text-ink',
 };
+const SIZES = {
+  md: 'h-10 px-4 text-sm',
+  sm: 'h-8 px-3 text-xs',
+  xs: 'h-7 px-2 text-xs',
+  icon: 'h-9 w-9 text-sm',
+} as const;
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
-  size?: 'sm' | 'md' | 'icon';
+  size?: keyof typeof SIZES;
+  /** Shows a spinner and blocks clicks while work is in flight. */
+  loading?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'secondary', size = 'md', className, type = 'button', ...rest },
+  { variant = 'secondary', size = 'md', className, type = 'button', loading, disabled, children, ...rest },
   ref,
 ) {
   return (
     <button
       ref={ref}
       type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={cn(
-        'inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
-        size === 'sm' && 'h-8 px-3 text-xs',
-        size === 'md' && 'h-10 px-4 text-sm',
-        size === 'icon' && 'h-9 w-9 text-sm',
+        'inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium leading-none',
+        'transition-[color,background-color,border-color,box-shadow,transform] duration-150 active:translate-y-px',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-soft focus-visible:ring-offset-2 focus-visible:ring-offset-void',
+        'disabled:pointer-events-none disabled:opacity-40 [&>svg]:shrink-0',
+        SIZES[size],
         VARIANTS[variant],
         className,
       )}
       {...rest}
-    />
+    >
+      {loading && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+      {children}
+    </button>
   );
 });
 
@@ -148,13 +169,13 @@ export function Panel({
   return (
     <section className={cn('st-panel p-4 sm:p-5', className)} aria-labelledby={title ? hid : undefined} id={id}>
       {(title || action) && (
-        <header className="mb-4 flex items-center justify-between gap-3">
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           {title && (
-            <h2 id={hid} className="st-label">
+            <h2 id={hid} className="st-label min-w-0">
               {title}
             </h2>
           )}
-          {action}
+          {action && <div className="ml-auto flex shrink-0 items-center gap-2">{action}</div>}
         </header>
       )}
       {children}
@@ -209,22 +230,22 @@ export function Modal({
         if (e.target === ref.current) onClose();
       }}
       className={cn(
-        'm-auto max-h-[92vh] w-[calc(100%-24px)] overflow-hidden rounded-2xl border border-line-strong bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/70',
+        'st-modal-h m-auto w-[calc(100%-24px)] overflow-hidden rounded-2xl border border-line-strong bg-surface p-0 text-ink shadow-2xl backdrop:bg-black/70',
         wide ? 'max-w-3xl' : 'max-w-lg',
       )}
     >
       {open && (
-        <div className="flex max-h-[92vh] flex-col animate-rise">
-          <header className="flex items-center justify-between border-b border-line px-5 py-4">
-            <h2 id={hid} className="text-base font-semibold">
+        <div className="st-modal-h flex flex-col animate-rise">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5 sm:py-4">
+            <h2 id={hid} className="min-w-0 text-base font-semibold">
               {title}
             </h2>
             <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close dialog">
               <X size={16} />
             </Button>
           </header>
-          <div className="overflow-y-auto px-5 py-5">{children}</div>
-          {footer && <footer className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
+          <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5 sm:py-5">{children}</div>
+          {footer && <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-4 py-3 sm:px-5">{footer}</footer>}
         </div>
       )}
     </dialog>

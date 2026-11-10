@@ -115,7 +115,7 @@ function PlayerMini() {
   );
 }
 
-export function AppShell({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+export function AppShell({ children, actions, menuExtras }: { children: ReactNode; actions?: ReactNode; menuExtras?: ReactNode }) {
   const { route, navigate, open } = useUI();
   const { state, saveError, retrySave, derived } = useStore();
   const [more, setMore] = useState(false);
@@ -147,12 +147,12 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
         Skip to content
       </a>
       {/* Sidebar */}
-      <aside className="sticky top-0 hidden h-screen flex-col gap-6 border-r border-line bg-void/60 px-4 py-5 backdrop-blur lg:flex">
-        <a href="#/dashboard" className="flex items-center gap-2.5 px-2" aria-label="Ascend home">
+      <aside className="sticky top-0 hidden h-screen flex-col gap-6 overflow-y-auto overscroll-contain border-r border-line bg-void/60 px-4 py-5 backdrop-blur lg:flex [@media(max-height:860px)]:gap-4 [@media(max-height:860px)]:py-4">
+        <a href="#/dashboard" className="flex shrink-0 items-center gap-2.5 px-2" aria-label="Ascend home">
           <Sigil size={24} />
           <span className="text-sm font-semibold tracking-[0.32em] text-ink">ASCEND</span>
         </a>
-        <nav aria-label="Primary" className="flex flex-col gap-4">
+        <nav aria-label="Primary" className="flex flex-col gap-4 [@media(max-height:860px)]:gap-2.5">
           {GROUPS.map((g) => (
             <div key={g.id} className="flex flex-col gap-0.5">
               <p className="mb-1 px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-faint">{g.label}</p>
@@ -164,11 +164,11 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
                     href={`#/${r}`}
                     aria-current={route === r ? 'page' : undefined}
                     className={cn(
-                      'group relative flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm transition-colors',
+                      'group relative flex h-9 shrink-0 items-center gap-3 rounded-lg px-2.5 text-sm transition-colors [@media(max-height:860px)]:h-8',
                       route === r ? 'bg-surface-2 text-ink' : 'text-ink-muted hover:bg-surface hover:text-ink',
                     )}
                   >
-                    {route === r && <span className="absolute left-0 top-2 h-5 w-0.5 rounded-full bg-violet-soft shadow-glow" aria-hidden="true" />}
+                    {route === r && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-violet-soft shadow-glow" aria-hidden="true" />}
                     <Icon size={16} aria-hidden="true" className={route === r ? 'text-violet-soft' : ''} />
                     <span className="flex-1">{label}</span>
                     {r === 'revision' && due > 0 && <span className="num rounded bg-ember/15 px-1.5 text-[11px] text-ember-soft">{due}</span>}
@@ -177,22 +177,23 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
             </div>
           ))}
         </nav>
-        <div className="mt-auto flex flex-col gap-3">
+        <div className="mt-auto flex shrink-0 flex-col gap-3">
           <PlayerMini />
-          <p className="px-1 text-[11px] text-ink-faint">
+          <p className="px-1 text-[11px] text-ink-faint [@media(max-height:760px)]:hidden">
             <kbd className="rounded border border-line px-1">N</kbd> log progress · <kbd className="rounded border border-line px-1">R</kbd> revise
           </p>
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-col pb-20 lg:pb-0">
+      {/* Notched phones in landscape: keep content clear of the cut-outs at the sides. */}
+      <div className="flex min-w-0 flex-col pb-[calc(5rem+env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] lg:pb-0">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-void/80 px-4 backdrop-blur sm:px-6">
-          <a href="#/dashboard" className="flex items-center gap-2 lg:hidden" aria-label="Ascend home">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-void/80 px-3 backdrop-blur sm:px-6">
+          <a href="#/dashboard" className="flex shrink-0 items-center gap-2 lg:hidden" aria-label="Ascend home">
             <Sigil size={22} />
           </a>
-          <h1 className="truncate text-sm font-medium text-ink-soft">{navItems.find((n) => n.route === route)?.label}</h1>
-          <div className="ml-auto flex items-center gap-2">
+          <h1 className="min-w-0 truncate text-sm font-medium text-ink-soft">{navItems.find((n) => n.route === route)?.label}</h1>
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
             {/* Study Time is for logging time after the fact, so it offers no timer of its own. */}
             {((STUDY_ROUTES.has(route) && route !== 'sessions') || state.activeSession) && <SessionChip />}
             {STUDY_ROUTES.has(route) && (
@@ -206,7 +207,7 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
                 <MoreHorizontal size={18} />
               </Button>
               {more && (
-                <div className="absolute right-0 top-11 z-30 w-48 rounded-xl border border-line-strong bg-surface p-1.5 shadow-2xl" onClick={() => setMore(false)}>
+                <div className="absolute right-0 top-11 z-30 max-h-[calc(100vh-4.5rem)] w-52 overflow-y-auto overscroll-contain rounded-xl border border-line-strong bg-surface p-1.5 shadow-2xl [max-height:calc(100dvh-4.5rem)]" onClick={() => setMore(false)}>
                   {navItems
                     .filter((n) => ['sessions', 'dashboard', 'analytics', 'life', 'personal', 'time', 'workout', 'nutrition', 'settings'].includes(n.route))
                     .map(({ route: r, label, icon: Icon }) => (
@@ -214,6 +215,7 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
                         <Icon size={16} aria-hidden="true" /> {label}
                       </a>
                     ))}
+                  {menuExtras}
                 </div>
               )}
             </div>
@@ -242,19 +244,19 @@ export function AppShell({ children, actions }: { children: ReactNode; actions?:
           </div>
         )}
 
-        <main id="main" className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-5 sm:px-6 sm:py-7">
+        <main id="main" className="mx-auto w-full min-w-0 max-w-[1280px] flex-1 px-4 py-5 sm:px-6 sm:py-7">
           {children}
         </main>
       </div>
 
       {/* Mobile bottom nav */}
-      <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-void/95 backdrop-blur lg:hidden">
+      <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-void/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
         {NAV.slice(0, 5).map(({ route: r, label, icon: Icon }) => (
           <a
             key={r}
             href={`#/${r}`}
             aria-current={route === r ? 'page' : undefined}
-            className={cn('relative flex h-16 flex-col items-center justify-center gap-1 text-[10px]', route === r ? 'text-violet-soft' : 'text-ink-muted')}
+            className={cn('relative flex h-16 min-w-0 flex-col items-center justify-center gap-1 text-[10px] [@media(max-height:480px)]:h-12', route === r ? 'text-violet-soft' : 'text-ink-muted')}
           >
             <Icon size={18} aria-hidden="true" />
             {label.split(' ')[0] === 'Low-Level' ? 'LLD' : label === 'System Design' ? 'HLD' : label === 'Dashboard' ? 'Home' : label}

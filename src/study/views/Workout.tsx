@@ -148,7 +148,7 @@ export function Workout() {
           }
         >
           {prog.start ? (
-            <div className="grid grid-cols-7 gap-1.5">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
               {schedule.map((s) => {
                 const meta = SLOT[s.status];
                 const w = phase.workouts.find((x) => x.id === s.plan);
@@ -157,12 +157,12 @@ export function Workout() {
                     key={s.date}
                     onClick={() => w && open({ type: 'workout-log', phaseId: phase.id, workoutId: w.id })}
                     disabled={!w || s.date > today}
-                    className={cn('flex flex-col items-center gap-1 rounded-lg border px-1 py-3 text-center disabled:cursor-default', meta.cls)}
+                    className={cn('flex min-w-0 flex-col items-center gap-1 rounded-lg border px-0.5 py-3 text-center disabled:cursor-default sm:px-1', meta.cls)}
                     aria-label={`${shortWeekday(s.date)} ${formatDay(s.date)}: ${w ? w.code : 'rest'}, ${meta.label}`}
                   >
                     <span className="text-[10px] uppercase opacity-80">{shortWeekday(s.date)}</span>
                     <span className="num text-sm text-ink">{parseDayKey(s.date).getDate()}</span>
-                    <span className="text-[11px] font-medium">{w ? w.code : 'Rest'}</span>
+                    <span className="whitespace-nowrap text-[10px] font-medium tracking-tight sm:text-[11px] sm:tracking-normal">{w ? w.code : 'Rest'}</span>
                     <span className="hidden text-[10px] opacity-80 sm:block">
                       {s.status === 'done' && s.doneOn && s.doneOn !== s.date
                         ? `Done ${shortWeekday(s.doneOn)}`
@@ -315,9 +315,9 @@ export function Workout() {
       <Panel
         title={`${phase.name} · Phase notes`}
         action={
-          <button className="text-xs text-ink-muted hover:text-ink" onClick={() => setShowNotes((v) => !v)} aria-expanded={showNotes}>
+          <Button variant="link" size="xs" className="-mr-2" onClick={() => setShowNotes((v) => !v)} aria-expanded={showNotes}>
             {showNotes ? 'Hide rest, cardio & substitution guide' : 'Rest, cardio & substitution guide'}
-          </button>
+          </Button>
         }
       >
         <p className="mb-4 text-sm text-ink-soft">{phase.intro}</p>

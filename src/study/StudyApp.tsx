@@ -70,7 +70,7 @@ function Sheets() {
 function Toasts() {
   const { toasts, dismiss } = useStore();
   return (
-    <div className="pointer-events-none fixed bottom-20 right-3 z-[60] flex w-[min(360px,calc(100%-24px))] flex-col gap-2 lg:bottom-5 lg:right-5" aria-live="polite" role="status">
+    <div className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-3 z-[60] flex w-[min(360px,calc(100%-24px))] flex-col gap-2 lg:bottom-5 lg:right-5" aria-live="polite" role="status">
       {toasts.map((t) => (
         <div
           key={t.id}
@@ -185,16 +185,35 @@ function HeaderActions({ theme, setTheme }: { theme: string; setTheme: (t: strin
     <div className="flex items-center gap-1">
       {/* The header backup covers Personal and Time; study data has its own in Settings → Data. */}
       {(route === 'personal' || route === 'time') && <ExportImport />}
-      <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}>
+      {/* On phones the theme and sign-out live in the More menu (MenuActions), so the page title has room. */}
+      <Button variant="ghost" size="icon" className="hidden sm:inline-flex" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme'}>
         {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
       </Button>
       {user && (
         <>
           {user.photoURL && <img src={user.photoURL} alt={user.displayName ?? 'User'} title={user.displayName ?? user.email ?? undefined} className="hidden h-7 w-7 rounded-full border border-line-strong object-cover sm:block" />}
-          <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out" title="Sign out">
+          <Button variant="ghost" size="icon" className="hidden sm:inline-flex" onClick={signOut} aria-label="Sign out" title="Sign out">
             <LogOut size={16} />
           </Button>
         </>
+      )}
+    </div>
+  );
+}
+
+/** Phone-only items at the bottom of the header's More menu. */
+function MenuActions({ theme, setTheme }: { theme: string; setTheme: (t: string) => void }) {
+  const { user, signOut } = useAppStore();
+  const item = 'flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-ink-soft hover:bg-surface-2 hover:text-ink';
+  return (
+    <div className="mt-1 border-t border-line pt-1 sm:hidden">
+      <button className={item} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+        {theme === 'light' ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />} {theme === 'light' ? 'Dark theme' : 'Light theme'}
+      </button>
+      {user && (
+        <button className={item} onClick={signOut}>
+          <LogOut size={16} aria-hidden="true" /> Sign out
+        </button>
       )}
     </div>
   );
@@ -228,7 +247,7 @@ function Root({ theme, setTheme }: { theme: string; setTheme: (t: string) => voi
   }
   return (
     <>
-      <AppShell actions={<HeaderActions theme={theme} setTheme={setTheme} />}>
+      <AppShell actions={<HeaderActions theme={theme} setTheme={setTheme} />} menuExtras={<MenuActions theme={theme} setTheme={setTheme} />}>
         <Routes />
       </AppShell>
       <Sheets />

@@ -61,9 +61,9 @@ export function Revision() {
       <Panel
         title="14-day forecast"
         action={
-          <button className="text-xs text-ink-muted hover:text-ink" onClick={() => navigate('settings')}>
+          <Button variant="link" size="xs" className="-mr-2" onClick={() => navigate('settings')}>
             Schedule: {state.settings.intervals.join(' → ')} days
-          </button>
+          </Button>
         }
       >
         <div className="flex h-28 items-end gap-1.5" role="img" aria-label={`Revisions due over the next 14 days: ${forecast.counts.join(', ')}`}>

@@ -27,10 +27,10 @@ export default function TimeTracker() {
     <div className="time-wrap">
       <div className="time-head">
         <div className="time-nav">
-          <button className="btn btn-sm" onClick={() => shift(-1)}>←</button>
+          <button className="btn" onClick={() => shift(-1)} aria-label="Previous day">←</button>
           <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          <button className="btn btn-sm" onClick={() => shift(1)}>→</button>
-          <button className="btn btn-sm" onClick={() => setDate(todayKey)}>Today</button>
+          <button className="btn" onClick={() => shift(1)} aria-label="Next day">→</button>
+          <button className="btn" onClick={() => setDate(todayKey)}>Today</button>
           <span className="time-day-label">{format(parseISO(date), 'EEEE dd MMM yyyy')}</span>
         </div>
         <div className="time-cfg">

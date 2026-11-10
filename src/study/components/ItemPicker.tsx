@@ -56,7 +56,7 @@ export function ItemPicker({
         <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" aria-hidden="true" />
         <input id={id} className="st-input pl-8" placeholder="Search by title or topic…" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" />
       </div>
-      <ul role="listbox" aria-label="Matching items" className="max-h-64 overflow-y-auto rounded-lg border border-line">
+      <ul role="listbox" aria-label="Matching items" className="max-h-64 overflow-y-auto overscroll-contain rounded-lg border border-line [@media(max-height:640px)]:max-h-40">
         {results.length === 0 && <li className="px-3 py-3 text-xs text-ink-muted">No matches. Switch to “New item” to add it.</li>}
         {results.map((it) => (
           <li key={it.id} role="option" aria-selected={false}>

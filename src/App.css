@@ -51,6 +51,13 @@
   --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Ascend's top bar (h-14); sticky card headers park just below it. */
   --header-h: 56px;
+  /* Control sizes, shared with the study pages' <Button> (h-10 / h-8 / h-9) and .st-input,
+     so a button and a field side by side line up on every page. */
+  --control-h: 40px;
+  --control-h-sm: 32px;
+  --control-h-icon: 36px;
+  --control-font: 14px;
+  --control-font-sm: 12px;
 
   color-scheme: dark;
   min-height: 100vh;
@@ -266,11 +273,13 @@
 /* ===== Icon buttons ===== */
 .icon-btn {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 32px;
-  height: 32px;
+  min-width: var(--control-h-icon);
+  height: var(--control-h-icon);
+  white-space: nowrap;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -519,8 +528,10 @@
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  font-size: 13.5px;
+  min-height: var(--control-h);
+  padding: 8px 12px;
+  font-size: var(--control-font);
+  line-height: 1.4;
   color: var(--text);
   font-family: inherit;
   transition: border-color var(--t), box-shadow var(--t);
@@ -572,19 +583,25 @@ input[type='checkbox'] { accent-color: var(--accent); }
 
 .btn {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   border: 1px solid var(--border-strong);
   background: var(--surface-2);
   color: var(--text);
   border-radius: var(--radius-sm);
-  padding: 7px 15px;
-  font-size: 13px;
+  min-height: var(--control-h);
+  padding: 0 16px;
+  font-size: var(--control-font);
   font-weight: 500;
+  line-height: 1;
   white-space: nowrap;
-  transition: all var(--t);
+  transition: background-color var(--t), border-color var(--t), color var(--t), box-shadow var(--t), transform var(--t);
 }
+
+.btn:active { transform: translateY(1px); }
+.btn svg { flex-shrink: 0; }
 
 .btn:hover {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
@@ -802,7 +819,7 @@ input[type='checkbox'] { accent-color: var(--accent); }
 }
 
 /* ===== Calendar bar ===== */
-.btn-sm { padding: 4px 11px; font-size: 12px; }
+.btn-sm { min-height: var(--control-h-sm); padding: 0 12px; font-size: var(--control-font-sm); }
 
 /* ===== Sections (list view) ===== */
 .sec { margin-bottom: 22px; }
@@ -946,9 +963,11 @@ select.chip { padding: 3px 6px; font-family: inherit; }
 .time-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .time-day-label { font-size: 14px; font-weight: 600; }
 
-.time-cfg { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--text-muted); }
+.time-cfg { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 12px; color: var(--text-muted); }
 .time-cfg label { display: flex; align-items: center; gap: 6px; }
 .time-cfg .input-num { width: 68px; }
+/* A select also needs room for its arrow (and touch screens use 16px text). */
+.time-cfg select.input-num { width: auto; min-width: 68px; }
 
 .time-grid {
   display: grid;
@@ -1240,7 +1259,8 @@ body { max-width: 100%; }
 
 @media (max-width: 1024px) {
   .app { --card-pad-x: 16px; --card-pad-y: 16px; }
-  .time-grid { grid-template-columns: 1fr; }
+  /* minmax(0, …): a plain 1fr can't shrink below the slot table, which then ran off the screen. */
+  .time-grid { grid-template-columns: minmax(0, 1fr); }
   .time-slots { max-height: none; }
 }
 
@@ -1275,7 +1295,8 @@ body { max-width: 100%; }
   .kv-label { min-width: 0; }
   .time-head { gap: 10px; }
   .time-nav { width: 100%; }
-  .time-nav .input { flex: 1; }
+  .time-nav .input { flex: 1; min-width: 0; }
+  .time-cfg { width: 100%; }
   .time-day-label { width: 100%; }
   .happy-row { flex-wrap: wrap; }
   .input-dt { min-width: 0; width: 100%; }
@@ -1283,6 +1304,8 @@ body { max-width: 100%; }
 
 @media (max-width: 420px) {
   .app { --card-pad-x: 11px; --card-pad-y: 12px; }
+  /* Too narrow for the date beside three buttons: the date gets its own line. */
+  .time-nav .input { flex-basis: 100%; order: -1; }
   .board-col,
 .board-add-section { flex: 0 0 88vw; }
   .th-text { min-width: 190px; }
@@ -1299,11 +1322,9 @@ body { max-width: 100%; }
 select.cell-input,
 textarea.input { font-size: 16px; }
 
-  .btn,
-.panel-tab { min-height: 40px; }
-  .btn-sm { min-height: 34px; }
-  .icon-btn,
-.btn-icon { min-width: 36px; min-height: 36px; }
+  .panel-tab { min-height: var(--control-h); }
+  .btn-sm { min-height: 36px; }
+  .btn-icon { min-width: var(--control-h-icon); min-height: var(--control-h-icon); }
   .link-btn { padding: 8px 10px; }
 
   input[type='checkbox'] { width: 20px; height: 20px; }
