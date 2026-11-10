@@ -1,6 +1,7 @@
 import type { AppState, Goal, MissReasonKind, QuestDays, SubItem } from '../domain/types';
 import { DEFAULT_QUEST_DAYS, DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } from '../domain/defaults';
 import { javaTrack } from '../domain/catalog';
+import { mergeAlgoCamp } from '../domain/algocamp';
 import { emptyNutrition } from '../domain/nutrition';
 import { addDays, isDayKey, toDayKey } from '../lib/date';
 
@@ -80,6 +81,14 @@ export function migrate(raw: unknown): AppState {
     const haveItems = new Set(itemList.map((i) => i.id));
     topicList = [...topicList, ...java.topics.filter((t) => !haveTopics.has(t.id))];
     itemList = [...itemList, ...java.items.filter((i) => !haveItems.has(i.id))];
+  }
+
+  // v6 → v7: the AlgoCamp course joins System Design and LLD. Cards you already have gain the
+  // lecture steps; everything else is added. Once — later edits and deletions are respected.
+  if (version < 7 && mode === 'real') {
+    const merged = mergeAlgoCamp(topicList, itemList, new Date().toISOString());
+    topicList = merged.topics;
+    itemList = merged.items;
   }
 
   return {

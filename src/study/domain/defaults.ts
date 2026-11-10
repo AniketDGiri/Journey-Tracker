@@ -1,5 +1,6 @@
 import type { AppState, Domain, QuestDays, Settings } from './types';
 import { REAL_STARTER_DOMAINS, buildCatalog } from './catalog';
+import { mergeAlgoCamp } from './algocamp';
 import { emptyNutrition } from './nutrition';
 import { toDayKey } from '../lib/date';
 
@@ -9,8 +10,9 @@ import { toDayKey } from '../lib/date';
  * 4: planner goals, training phases (fitness) and nutrition tracking.
  * 5: the Java track (topics + syllabus) added to DSA.
  * 6: revisions are planned by hand by default; automatic dates are cleared once.
+ * 7: the AlgoCamp system design course (HLD + LLD) added as cards with lecture steps.
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const emptyFitness = (): AppState['fitness'] => ({ activePhaseId: 'phase-0', starts: {}, logs: [] });
 
@@ -57,7 +59,9 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export function createEmptyState(now: Date = new Date(), starterDomains: Domain[] = REAL_STARTER_DOMAINS): AppState {
   const iso = now.toISOString();
-  const { topics, items } = buildCatalog(iso, starterDomains);
+  const catalog = buildCatalog(iso, starterDomains);
+  // A real journey comes with the AlgoCamp course; sample data stays as it was.
+  const { topics, items } = starterDomains === REAL_STARTER_DOMAINS ? mergeAlgoCamp(catalog.topics, catalog.items, iso) : catalog;
   return {
     schemaVersion: SCHEMA_VERSION,
     mode: 'real',
