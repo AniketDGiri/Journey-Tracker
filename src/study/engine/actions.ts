@@ -20,7 +20,7 @@ import type {
 } from '../domain/types';
 import { RUBRICS, makeItem } from '../domain/catalog';
 import { uid } from '../lib/id';
-import { addDays } from '../lib/date';
+import { addDays, isDayKey } from '../lib/date';
 import { grant, levelInfo, totalXp } from './progression';
 import { applyRecall, isLearned, ladderDate, reschedule } from './revision';
 import { rubricRatio } from './mastery';
@@ -30,7 +30,7 @@ import { BOSSES, bossReward, bossScore } from './bosses';
 import { syncPenalties } from './penalties';
 import type { Quest } from './quests';
 import { periodStart } from './plan';
-import { completionEvent, recentRecords, reconcileClaims, reverseXp, settleItem, tickEvent, withoutEvents } from './undo';
+import { completionEvent, recentRecords, reconcileClaims, reverseXp, settleItem, studyDays, tickEvent, withoutEvents } from './undo';
 
 /**
  * All state transitions live here as pure functions: (state, input, ctx) → state.
@@ -216,6 +216,78 @@ export function toggleSubItem(state: AppState, id: string, subId: string, ctx: C
   }
   const status = deriveStatus(it.status, subItems);
   return logProgress(next, id, { status, subItemId: subId, practiced: !isLearned(it) && status === it.status }, ctx);
+}
+
+// ── Done on an earlier day ───────────────────────────────────────────────
+
+/** The context for recording something on `day`: today, or an earlier day (never a later one). */
+export function onDay(day: DayKey, ctx: Ctx): Ctx {
+  if (!isDayKey(day)) throw new ActionError('Pick a date.');
+  if (day > ctx.today) throw new ActionError('That date is in the future.');
+  return day === ctx.today ? ctx : { today: day, now: new Date(`${day}T12:00:00`).toISOString() };
+}
+
+/** The day an item was completed: its completion record, or (for older items with none) when it was first studied. */
+export function completedOn(state: AppState, item: PracticeItem): DayKey | undefined {
+  if (!isLearned(item)) return undefined;
+  return completionEvent(state, item.id, item.status)?.date ?? item.review.firstStudiedAt;
+}
+
+/**
+ * Moves a record to another day, with the XP it earned, so streaks, quests and charts count it there.
+ * The item's study dates follow, and a day that no longer has the work loses a quest it had claimed.
+ */
+function moveEvent(state: AppState, ev: ActivityEvent, day: DayKey, ctx: Ctx): AppState {
+  if (ev.date === day) return state;
+  const at = onDay(day, ctx).now;
+  let next: AppState = { ...state, activity: state.activity.map((a) => (a.id === ev.id ? { ...a, date: day, at } : a)) };
+  const completion = (ev.type === 'solve' || ev.type === 'learn') && ev.itemId;
+  if (completion) {
+    next = { ...next, xp: next.xp.map((x) => (x.type === 'outcome' && x.ref === ev.itemId && x.amount > 0 && x.date === ev.date ? { ...x, date: day, at } : x)) };
+  }
+  if (ev.itemId) next = refreshStudyDates(next, ev.itemId, completion ? day : undefined);
+  return reconcileClaims(next, [ev.date], ctx);
+}
+
+/** First / last studied from the log; an automatic first revision follows a moved completion. */
+function refreshStudyDates(state: AppState, itemId: string, completedDay?: DayKey): AppState {
+  const it = state.items.find((i) => i.id === itemId);
+  if (!it) return state;
+  const { first, last } = studyDays(state, itemId);
+  const review = { ...it.review, firstStudiedAt: first ?? it.review.firstStudiedAt, lastStudiedAt: last ?? it.review.lastStudiedAt };
+  if (completedDay && isLearned(it) && !review.history.length && !review.planned && state.settings.revisionMode === 'auto') {
+    review.nextReviewAt = addDays(completedDay, state.settings.intervals[0] ?? 1);
+  }
+  return replaceItem(state, { ...it, review });
+}
+
+/**
+ * Marks an item completed on `day` (with `status`, if it isn't completed yet). An item already
+ * completed keeps its outcome and has its completion moved to that day.
+ */
+export function completeOn(state: AppState, id: string, status: ItemStatus, day: DayKey, ctx: Ctx): AppState {
+  const it = findItem(state, id);
+  const c = onDay(day, ctx);
+  if (!isLearned(it)) {
+    if (!LEARNED.has(status)) throw new ActionError('Pick a completed outcome.');
+    return logProgress(state, id, { status }, c);
+  }
+  const ev = completionEvent(state, id, it.status);
+  if (ev) return moveEvent(state, ev, day, ctx);
+  // Completed before completions were recorded: record it on that day now.
+  return refreshStudyDates(logProgress(state, id, { practiced: true }, c), id, day);
+}
+
+/** Ticks a step as done on `day`, or moves a ticked step (and what it recorded) to that day. */
+export function stepDoneOn(state: AppState, id: string, subId: string, day: DayKey, ctx: Ctx): AppState {
+  const it = findItem(state, id);
+  const step = it.subItems?.find((s) => s.id === subId);
+  if (!step) throw new ActionError('That step no longer exists.');
+  const c = onDay(day, ctx);
+  if (!step.done) return toggleSubItem(state, id, subId, c);
+  const next = replaceItem(state, { ...it, subItems: it.subItems!.map((s) => (s.id === subId ? { ...s, doneAt: day } : s)), updatedAt: ctx.now });
+  const ev = tickEvent(state, id, step);
+  return ev ? moveEvent(next, ev, day, ctx) : next;
 }
 
 export function deleteItem(state: AppState, id: string): AppState {

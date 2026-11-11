@@ -3,7 +3,8 @@ import { CalendarPlus, ChevronLeft, ChevronRight, Target, X } from 'lucide-react
 import type { DayKey, GoalPeriod, PracticeItem } from '../domain/types';
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
-import { moveGoal, removeGoal, toggleSubItem } from '../engine/actions';
+import { moveGoal, removeGoal, stepDoneOn, toggleSubItem } from '../engine/actions';
+import { DoneOnButton } from './DoneOn';
 import { evaluateGoals, goalsForDay, goalsOfPeriod, goalsWithin, rollup, sortGoals, type GoalStatus, type GoalView } from '../engine/plan';
 import { addDays, addMonths, daysBetween, endOfMonth, formatDay, monthYear, parseDayKey, shortWeekday, startOfMonth, startOfWeek } from '../lib/date';
 import { cn } from '../lib/cn';
@@ -110,6 +111,15 @@ export function GoalRow({ view, compact }: { view: GoalView; compact?: boolean }
           {!compact && goal.period !== 'day' && <GoalWhen view={view} />}
         </span>
       </div>
+      {isSub && subItem && item && (
+        <DoneOnButton
+          label={subItem.title}
+          done={subItem.done}
+          value={subItem.doneAt}
+          today={today}
+          onPick={(d) => act((s, ctx) => stepDoneOn(s, item.id, subItem.id, d, ctx), { success: `${subItem.done ? 'Moved' : 'Done'}: ${subItem.title} · ${d === today ? 'today' : formatDay(d, today)}` })}
+        />
+      )}
       {done ? (
         <span className="num shrink-0 text-[11px] text-arc-soft">✓ {view.completedOn ? formatDay(view.completedOn, today) : ''}</span>
       ) : status === 'missed' ? (

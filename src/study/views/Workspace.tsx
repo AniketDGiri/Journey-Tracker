@@ -1,10 +1,10 @@
 import { Fragment, useMemo, useState } from 'react';
 import { FolderPlus, Plus, RotateCcw, Search, Timer } from 'lucide-react';
-import type { Difficulty, Domain, ItemStatus, PracticeItem } from '../domain/types';
+import type { Difficulty, Domain, ItemStatus, PracticeItem, SubItem } from '../domain/types';
 import { DOMAIN_META, STATUS_LABELS } from '../domain/catalog';
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
-import { logProgress, toggleSubItem } from '../engine/actions';
+import { completedOn, completeOn, logProgress, stepDoneOn, toggleSubItem } from '../engine/actions';
 import { domainMastery, itemMastery, MASTERY_EXPLAINER } from '../engine/mastery';
 import { dueBucket, isLearned } from '../engine/revision';
 import { xpByDomain } from '../engine/progression';
@@ -14,6 +14,7 @@ import { Bar, Button, Checkbox, Empty, Panel, Ring, Segmented } from '../compone
 import { DiffDot, STATUS_ORDER, STATUS_TONE, SubItemCount } from '../components/bits';
 import { Legend, SkillTree } from '../components/progress';
 import { PlanButton } from '../components/planner';
+import { DoneDate, DoneOnButton } from '../components/DoneOn';
 
 type Tab = 'tree' | 'items' | 'revision';
 type DueFilter = 'all' | 'due' | 'upcoming' | 'unscheduled' | 'weak';
@@ -326,7 +327,7 @@ export function Workspace({ domain }: { domain: Domain }) {
 }
 
 function ItemTable({ items, topicName, onStatus }: { items: PracticeItem[]; topicName: Map<string, string>; onStatus: (i: PracticeItem, s: ItemStatus) => void }) {
-  const { today, act } = useStore();
+  const { state, today, act } = useStore();
   const { open } = useUI();
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const toggleRow = (id: string) =>
@@ -341,6 +342,15 @@ function ItemTable({ items, topicName, onStatus }: { items: PracticeItem[]; topi
     const finishing = !!sub && !sub.done && (it.subItems ?? []).every((s) => s.id === subId || s.done);
     act((s, ctx) => toggleSubItem(s, it.id, subId, ctx), { success: finishing ? `Completed “${it.title}”` : undefined, silent: !finishing });
   };
+  const when = (day: string) => (day === today ? 'today' : formatDay(day, today));
+  /** A step done on a past day (or its date moved). */
+  const stepOn = (it: PracticeItem, sub: SubItem, day: string) =>
+    act((s, ctx) => stepDoneOn(s, it.id, sub.id, day, ctx), { success: `${sub.done ? 'Moved' : 'Done'}: ${sub.title} · ${when(day)}` });
+  /** The whole item completed on a past day (or its completion moved). */
+  const itemOn = (it: PracticeItem, day: string) =>
+    act((s, ctx) => completeOn(s, it.id, isLearned(it) ? it.status : 'independent', day, ctx), {
+      success: `${isLearned(it) ? 'Moved' : 'Completed'}: ${it.title} · ${when(day)}`,
+    });
   return (
     <div className="-mx-4 overflow-x-auto sm:-mx-5">
       <table className="w-full min-w-[720px] text-sm">
@@ -377,6 +387,7 @@ function ItemTable({ items, topicName, onStatus }: { items: PracticeItem[]; topi
                       </button>
                       <SubItemCount item={it} expanded={isOpen} onToggle={() => toggleRow(it.id)} controls={panelId} />
                       <PlanButton itemId={it.id} label={it.title} className="ml-auto" />
+                      <DoneOnButton label={it.title} done={isLearned(it)} value={completedOn(state, it)} today={today} onPick={(d) => itemOn(it, d)} />
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
@@ -395,6 +406,7 @@ function ItemTable({ items, topicName, onStatus }: { items: PracticeItem[]; topi
                         </option>
                       ))}
                     </select>
+                    {isLearned(it) && <DoneDate day={completedOn(state, it)} today={today} className="mt-0.5 block" />}
                   </td>
                   <td className="num px-3 py-2.5 text-xs text-ink-soft">{it.confidence ? `${it.confidence}/5` : '—'}</td>
                   <td className="px-3 py-2.5 text-xs">
@@ -421,6 +433,8 @@ function ItemTable({ items, topicName, onStatus }: { items: PracticeItem[]; topi
                               <div className="min-w-0 flex-1">
                                 <Checkbox checked={s.done} onChange={() => tick(it, s.id)} label={<span className={cn(s.done && 'text-ink-muted line-through')}>{s.title}</span>} />
                               </div>
+                              {s.done && <DoneDate day={s.doneAt} today={today} />}
+                              <DoneOnButton label={s.title} done={s.done} value={s.doneAt} today={today} onPick={(d) => stepOn(it, s, d)} />
                               <PlanButton itemId={it.id} subItemId={s.id} label={s.title} />
                             </li>
                           ))}

@@ -4,7 +4,7 @@ import type { Difficulty, ItemStatus, RecallQuality } from '../../domain/types';
 import { KIND_LABELS } from '../../domain/catalog';
 import { useStore } from '../../store/AppStore';
 import { useUI } from '../../store/ui';
-import { deleteItem, deriveStatus, editItem, logProgress, rescheduleItem, reviewItem, setSubItems } from '../../engine/actions';
+import { completedOn, completeOn, deleteItem, deriveStatus, editItem, logProgress, onDay, rescheduleItem, reviewItem, setSubItems } from '../../engine/actions';
 import { itemMastery } from '../../engine/mastery';
 import { isLearned, nextInterval } from '../../engine/revision';
 import { grantedFor } from '../../engine/progression';
@@ -29,6 +29,10 @@ export function ItemSheet({ itemId }: { itemId: string }) {
   const [subItems, setSubItemList] = useState(item?.subItems ?? []);
   const [nextDate, setNextDate] = useState(item?.review.nextReviewAt ?? '');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The day this was done: what's ticked or completed in this save counts on it. For a completed item it starts on its completion day.
+  const doneBefore = item ? completedOn(state, item) : undefined;
+  const [doneOn, setDoneOn] = useState(doneBefore ?? today);
+  const [dateTouched, setDateTouched] = useState(false);
 
   if (!item) {
     return (
@@ -59,9 +63,12 @@ export function ItemSheet({ itemId }: { itemId: string }) {
           },
           ctx,
         );
-        next = setSubItems(next, item.id, subItems, ctx);
-        next = logProgress(next, item.id, { status, confidence, rubric }, ctx);
+        const on = dateTouched ? onDay(doneOn, ctx) : ctx;
+        next = setSubItems(next, item.id, subItems, on);
+        next = logProgress(next, item.id, { status, confidence, rubric }, on);
         const it = next.items.find((i) => i.id === item.id)!;
+        // Already completed, still completed: the new date moves the completion.
+        if (dateTouched && isLearned(item) && isLearned(it)) next = completeOn(next, item.id, it.status, doneOn, ctx);
         if (nextDate && isLearned(it) && nextDate !== item.review.nextReviewAt) next = rescheduleItem(next, item.id, nextDate, ctx);
         return next;
       },
@@ -204,6 +211,7 @@ export function ItemSheet({ itemId }: { itemId: string }) {
 
         <div className="flex flex-col gap-4">
           <SubItemsEditor
+            today={today}
             value={subItems}
             onChange={(list) => {
               setSubItemList(list);
@@ -212,6 +220,27 @@ export function ItemSheet({ itemId }: { itemId: string }) {
           />
           <Field label="Outcome">
             <StatusPicker kind={item.kind} value={status} onChange={setStatus} />
+          </Field>
+          <Field
+            label={learned ? 'Completed on' : 'Done on'}
+            htmlFor="it-done"
+            hint={
+              learned
+                ? 'Change it if you finished this on another day: its XP, streak and quests move with it.'
+                : 'Did this earlier? Pick the day: steps you tick and an outcome you set here count on that day.'
+            }
+          >
+            <input
+              id="it-done"
+              type="date"
+              className="st-input num w-44"
+              max={today}
+              value={doneOn}
+              onChange={(e) => {
+                setDoneOn(e.target.value && e.target.value <= today ? e.target.value : today);
+                setDateTouched(true);
+              }}
+            />
           </Field>
           <RubricEditor kind={item.kind} value={rubric} onChange={setRubric} />
           <Field label="Confidence">

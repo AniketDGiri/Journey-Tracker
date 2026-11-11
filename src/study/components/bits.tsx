@@ -5,6 +5,7 @@ import { DOMAIN_META, RUBRICS, STATUS_LABELS } from '../domain/catalog';
 import { Badge, Bar, Button, Checkbox, Segmented } from './ui';
 import { uid } from '../lib/id';
 import { cn } from '../lib/cn';
+import { formatDay } from '../lib/date';
 import type { TopicState } from '../engine/mastery';
 
 export function DiffDot({ difficulty }: { difficulty?: Difficulty }) {
@@ -87,7 +88,7 @@ export function StatTile({ label, value, sub }: { label: string; value: React.Re
 }
 
 /** Checklist of steps inside an item. Ticking every step completes the item. */
-export function SubItemsEditor({ value, onChange }: { value: SubItem[]; onChange: (v: SubItem[]) => void }) {
+export function SubItemsEditor({ value, onChange, today }: { value: SubItem[]; onChange: (v: SubItem[]) => void; /** Shows the day each saved step was done. */ today?: string }) {
   const [draft, setDraft] = useState('');
   const done = value.filter((s) => s.done).length;
   const add = () => {
@@ -119,6 +120,7 @@ export function SubItemsEditor({ value, onChange }: { value: SubItem[]; onChange
                     label={<span className={cn(s.done && 'text-ink-muted line-through')}>{s.title}</span>}
                   />
                 </div>
+                {today && s.done && s.doneAt && <span className="num whitespace-nowrap text-[11px] text-ink-muted">{formatDay(s.doneAt, today)}</span>}
                 <button
                   type="button"
                   className="rounded p-1 text-ink-faint opacity-60 hover:bg-surface-3 hover:text-rose group-hover:opacity-100"
