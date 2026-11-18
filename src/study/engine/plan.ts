@@ -38,7 +38,18 @@ export interface GoalView {
   windowEnd: DayKey;
 }
 
+// Quests evaluate goals once per day they judge; state is immutable, so cache per state + day.
+const cache = new WeakMap<AppState, Map<DayKey, GoalView[]>>();
+
 export function evaluateGoals(state: AppState, today: DayKey): GoalView[] {
+  let byDay = cache.get(state);
+  if (!byDay) cache.set(state, (byDay = new Map()));
+  let hit = byDay.get(today);
+  if (!hit) byDay.set(today, (hit = evaluate(state, today)));
+  return hit;
+}
+
+function evaluate(state: AppState, today: DayKey): GoalView[] {
   const items = new Map(state.items.map((i) => [i.id, i]));
   // Work days per item, sorted — index activity and sub-item ticks once.
   const workByItem = new Map<string, DayKey[]>();

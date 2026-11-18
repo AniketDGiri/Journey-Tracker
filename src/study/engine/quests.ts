@@ -47,12 +47,34 @@ function distinct(evs: ActivityEvent[], key: (e: ActivityEvent) => string | unde
   return new Set(evs.map((e) => key(e) ?? e.id)).size;
 }
 
-/** The quests the player picked for `day`; every quest when nothing was picked. */
+/**
+ * The quests set for `day`. From `planOnlySince` on, that is only what Week Plan holds
+ * for the day: one quest per planned item, plus its planned revisions. Before it, the
+ * weekly rhythm's track quests (narrowed by any hand-picked questPlan) — history stays as it was.
+ */
 export function dailyQuests(state: AppState, day: DayKey): Quest[] {
   const all = availableDailyQuests(state, day);
   const plan = state.questPlan?.[day];
-  return plan ? all.filter((q) => plan.includes(q.id)) : all;
+  return plan ? all.filter((q) => isPlannedQuest(q) || plan.includes(q.id)) : all;
 }
+
+/** Quest ids for planned items are `plan:<goal id>`. */
+export const PLANNED_PREFIX = 'plan:';
+export const isPlannedQuest = (q: Pick<Quest, 'id'>) => q.id.startsWith(PLANNED_PREFIX);
+
+/** Whether `day`'s daily quests come only from Week Plan (no automatic track quests). */
+export const planOnly = (state: AppState, day: DayKey): boolean => !!state.planOnlySince && day >= state.planOnlySince;
+
+/** Whether plan-driven quests apply to a period starting `start` (never before they existed). */
+const planQuestsOn = (state: AppState, start: DayKey, startOf: (d: DayKey) => DayKey) => !state.planQuestsSince || start >= startOf(state.planQuestsSince);
+
+/** Plan-only periods size the DSA targets from the DSA problems planned in them (Java concepts excluded). */
+function plannedDsa(state: AppState, from: DayKey, to: DayKey, asOf: DayKey): number {
+  const java = new Set(state.topics.filter((x) => x.track === JAVA_TRACK).map((x) => x.id));
+  return evaluateGoals(state, asOf).filter((v) => v.item?.domain === 'dsa' && !java.has(v.item.topicId) && v.windowStart >= from && v.windowEnd <= to).length;
+}
+
+const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
 
 export type StudyTrack = keyof QuestDays;
 
@@ -63,9 +85,9 @@ export const STUDY_TRACKS: { id: StudyTrack; quest: string; label: string }[] = 
   { id: 'java', quest: 'daily-java', label: 'Java' },
 ];
 
-/** Whether `track`'s daily quest is set on `day` (Settings → Weekly rhythm). */
+/** Whether `track`'s daily quest was set on `day` by the weekly rhythm. Never on a plan-only day. */
 export const scheduledOn = (state: AppState, track: StudyTrack, day: DayKey): boolean =>
-  (state.settings.questDays ?? DEFAULT_QUEST_DAYS)[track].includes(weekday(day));
+  !planOnly(state, day) && (state.settings.questDays ?? DEFAULT_QUEST_DAYS)[track].includes(weekday(day));
 
 /** How many days in [from, to] the track is scheduled. */
 export function scheduledDays(state: AppState, track: StudyTrack, from: DayKey, to: DayKey): number {
@@ -189,6 +211,23 @@ export function availableDailyQuests(state: AppState, today: DayKey): Quest[] {
       }),
     );
   }
+  // Each item planned for this very day (Week Plan) is its own quest: done when its work is logged by the end of the day.
+  if (planQuestsOn(state, today, (d) => d)) {
+    for (const v of evaluateGoals(state, today)) {
+      if (!v.item || v.goal.period !== 'day' || v.goal.start !== today) continue;
+      quests.push(
+        mk({
+          id: `${PLANNED_PREFIX}${v.goal.id}`,
+          domain: v.item.domain,
+          title: v.parent ? `${v.title} · ${v.parent}` : v.title,
+          detail: v.subItem ? 'A planned step — tick it when it’s done.' : 'Planned in Week Plan. Log real work on it to complete.',
+          progress: v.completedOn && v.completedOn <= today ? 1 : 0,
+          target: 1,
+          action: v.subItem ? { type: 'navigate', to: v.item.domain } : { type: 'log', domain: v.item.domain },
+        }),
+      );
+    }
+  }
   return quests;
 }
 
@@ -210,9 +249,11 @@ export function weeklyChallenges(state: AppState, today: DayKey): Quest[] {
       progress: Math.min(q.progress, q.target),
     };
   };
-  // Sized from the weekly rhythm: half of the week's DSA quota, 1 to 4.
-  const dsaWeek = state.settings.targets.dsaPerDay * scheduledDays(state, 'dsa', ws, we);
+  // Half of the week's DSA quota, 1 to 4: the rhythm's quota on older days, the DSA problems planned on plan-only ones.
+  const dsaWeek = state.settings.targets.dsaPerDay * scheduledDays(state, 'dsa', ws, we) + (planOnly(state, we) ? plannedDsa(state, ws, we, today) : 0);
   const hardTarget = Math.min(4, Math.max(1, Math.round(dsaWeek / 2)));
+  // Everything planned inside this week (day and week goals), from Week Plan.
+  const plannedWeek = planQuestsOn(state, ws, startOfWeek) ? evaluateGoals(state, today).filter((v) => v.item && v.windowStart >= ws && v.windowEnd <= we) : [];
   // Hand-planned revisions happen on fewer days than ladder-driven ones.
   const recallTarget = state.settings.revisionMode === 'auto' ? 15 : 10;
   return [
@@ -259,6 +300,18 @@ export function weeklyChallenges(state: AppState, today: DayKey): Quest[] {
       progress: new Set(inWeek.map((a) => a.date)).size,
       target: 5,
     }),
+    ...(plannedWeek.length
+      ? [
+          mk({
+            id: 'weekly-plan',
+            title: `Achieve the ${plural(plannedWeek.length, 'goal')} you planned this week`,
+            detail: 'Day and week goals from your Week Plan.',
+            progress: plannedWeek.filter((v) => v.completedOn && v.completedOn <= we).length,
+            target: plannedWeek.length,
+            action: { type: 'navigate', to: 'plan' },
+          }),
+        ]
+      : []),
   ];
 }
 
@@ -282,11 +335,17 @@ export function monthlyChallenges(state: AppState, today: DayKey): Quest[] {
       progress: Math.min(q.progress, q.target),
     };
   };
-  // Three quarters of the month's scheduled DSA quota: a stretch, with room for an off weekend.
-  const dsaTarget = Math.max(5, Math.round(t.dsaPerDay * scheduledDays(state, 'dsa', ms, me) * 0.75));
+  // Three quarters of the rhythm's DSA quota on older days (room for an off weekend), plus every DSA problem planned on plan-only days.
+  const fromPlan = planOnly(state, me);
+  const dsaTarget = Math.max(fromPlan ? 1 : 5, Math.round(t.dsaPerDay * scheduledDays(state, 'dsa', ms, me) * 0.75) + (fromPlan ? plannedDsa(state, ms, me, today) : 0));
   const hoursTarget = Math.max(10, Math.round((t.minutesPerDay * 20) / 60));
   const minutes = state.sessions.filter((s) => s.date >= ms && s.date <= me).reduce((n, s) => n + s.durationMin, 0);
-  const goalsDone = evaluateGoals(state, today).filter((g) => g.status === 'done' && g.completedOn && g.completedOn >= ms && g.completedOn <= me).length;
+  const goals = evaluateGoals(state, today);
+  // From Week Plan: the goals planned inside this month set the target. Without a plan, the old open-ended target.
+  const plannedMonth = planQuestsOn(state, ms, startOfMonth) ? goals.filter((v) => v.item && v.windowStart >= ms && v.windowEnd <= me) : [];
+  const goalsDone = plannedMonth.length
+    ? plannedMonth.filter((v) => v.completedOn && v.completedOn <= me).length
+    : goals.filter((g) => g.status === 'done' && g.completedOn && g.completedOn >= ms && g.completedOn <= me).length;
   return [
     mk({
       id: 'monthly-dsa',
@@ -336,10 +395,11 @@ export function monthlyChallenges(state: AppState, today: DayKey): Quest[] {
     }),
     mk({
       id: 'monthly-plan',
-      title: 'Achieve 10 planned goals',
-      detail: 'Plan items for a day, week or month — then do them.',
+      title: plannedMonth.length ? `Achieve the ${plural(plannedMonth.length, 'goal')} you planned this month` : 'Achieve 10 planned goals',
+      detail: plannedMonth.length ? 'Day, week and month goals from your Week Plan.' : 'Plan items for a day, week or month in Week Plan — then do them.',
       progress: goalsDone,
-      target: 10,
+      target: plannedMonth.length || 10,
+      action: { type: 'navigate', to: 'plan' },
     }),
   ];
 }

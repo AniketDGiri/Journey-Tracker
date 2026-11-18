@@ -1,10 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Award, Check, ChevronLeft, ChevronRight, Crown, Flame, Lock, TriangleAlert, X } from 'lucide-react';
+import { Award, CalendarRange, Check, ChevronLeft, ChevronRight, Crown, Flame, Lock, TriangleAlert, X } from 'lucide-react';
+import { openPlanDay } from './WeekPlan';
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
-import { STUDY_TRACKS, availableDailyQuests, dailyQuests, focusOf, missions, monthlyChallenges, requiredOf, weeklyChallenges, type Quest } from '../engine/quests';
+import { STUDY_TRACKS, dailyQuests, focusOf, isPlannedQuest, missions, planOnly, monthlyChallenges, requiredOf, weeklyChallenges, type Quest } from '../engine/quests';
 import type { AppState } from '../domain/types';
-import { claimQuest, setQuestPlan } from '../engine/actions';
+import { claimQuest } from '../engine/actions';
 import { bossStatuses } from '../engine/bosses';
 import { ACHIEVEMENTS, ACHIEVEMENT_GROUPS, evaluateAchievements } from '../engine/achievements';
 import { RANKS, totalXpForLevel } from '../engine/progression';
@@ -207,6 +208,13 @@ function HistoryStrip({ title, cells, note }: { title: string; cells: { key: str
 
 /** "System design day (HLD · LLD)." — what the weekly rhythm sets for `day`. */
 function focusLine(state: AppState, day: string): string {
+  if (planOnly(state, day)) {
+    const qs = dailyQuests(state, day);
+    const items = qs.filter(isPlannedQuest).length;
+    const revising = qs.some((q) => q.id === 'daily-revise');
+    if (!items && !revising) return 'Nothing planned for this day — plan it in Week Plan.';
+    return `From your Week Plan: ${items} planned item${items === 1 ? '' : 's'}${revising ? ' plus your planned revisions' : ''}.`;
+  }
   const f = focusOf(state, day);
   const names = f.map((t) => STUDY_TRACKS.find((x) => x.id === t)!.label).join(' · ');
   if (!f.length) return 'No study quests set today — revise what you planned, or rest.';
@@ -216,15 +224,10 @@ function focusLine(state: AppState, day: string): string {
 }
 
 function DailyTab({ onBacklog }: { onBacklog: () => void }) {
-  const { state, today, act } = useStore();
+  const { state, today } = useStore();
   const [day, setDay] = useState(today);
-  const [editing, setEditing] = useState(false);
   const isPast = day < today;
-  const planning = !isPast && (editing || day > today);
-  const available = useMemo(() => availableDailyQuests(state, day), [state, day]);
   const chosen = useMemo(() => dailyQuests(state, day), [state, day]);
-  const picked = new Set(chosen.map((q) => q.id));
-  const hasPlan = !!state.questPlan?.[day];
   const zone = useMemo(() => penaltyZone(state, today), [state, today]);
   const stake = useMemo(() => atStakeToday(state, today), [state, today]);
   const log = useMemo(() => penaltyLog(state, 15), [state]);
@@ -238,12 +241,7 @@ function DailyTab({ onBacklog }: { onBacklog: () => void }) {
     [state, today],
   );
 
-  const save = (ids: string[] | null) => act((s) => setQuestPlan(s, day, ids), { silent: true });
-  const toggle = (id: string) => save(available.filter((q) => (q.id === id ? !picked.has(id) : picked.has(q.id))).map((q) => q.id));
-  const go = (to: string) => {
-    setDay(to);
-    setEditing(false);
-  };
+  const go = (to: string) => setDay(to);
 
   const dayNav = (
     <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -260,9 +258,9 @@ function DailyTab({ onBacklog }: { onBacklog: () => void }) {
           Today
         </Button>
       )}
-      {!isPast && !planning && (
-        <Button size="sm" variant="secondary" className="ml-auto" onClick={() => setEditing(true)}>
-          Choose quests
+      {!isPast && (
+        <Button size="sm" variant="secondary" className="ml-auto" onClick={() => openPlanDay(day)}>
+          <CalendarRange size={14} aria-hidden="true" /> Plan this day
         </Button>
       )}
     </div>
@@ -281,49 +279,6 @@ function DailyTab({ onBacklog }: { onBacklog: () => void }) {
       )}
       <MissedDayPrompt />
       <BacklogNudge onOpen={onBacklog} />
-      {planning ? (
-        <SystemWindow label="Choose daily quests">
-          <SystemTag>DAILY QUEST · {formatDay(day, today).toUpperCase()}</SystemTag>
-          <h2 className="mt-2 text-lg font-semibold">Choose the quests you’ll take on</h2>
-          <p className="mt-1 text-sm text-ink-soft">Only the ones you tick count for {day === today ? 'today' : 'that day'} and show on your dashboard.</p>
-          {dayNav}
-          <ul className="mt-2 flex flex-col divide-y divide-line/70">
-            {available.map((q) => (
-              <li key={q.id}>
-                <label className="flex cursor-pointer items-center gap-3 py-3">
-                  <input type="checkbox" checked={picked.has(q.id)} onChange={() => toggle(q.id)} className="h-4 w-4 accent-violet" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {q.domain && <DomainTag domain={q.domain} />}
-                      {q.bonus && <Badge tone="ember">Bonus</Badge>}
-                      <span className="truncate text-sm">{q.title}</span>
-                    </div>
-                    <p className="mt-0.5 truncate text-[11px] text-ink-muted">{q.detail}</p>
-                  </div>
-                  {state.settings.gamification && <span className="num text-[11px] text-violet-soft">+{q.reward}</span>}
-                </label>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-            <span className="num text-[11px] text-ink-muted">
-              {picked.size} of {available.length} selected
-            </span>
-            <span className="ml-auto flex gap-2">
-              {hasPlan && (
-                <Button size="sm" variant="ghost" onClick={() => save(null)}>
-                  Select all
-                </Button>
-              )}
-              {day <= today && (
-                <Button size="sm" variant="primary" onClick={() => setEditing(false)}>
-                  Done
-                </Button>
-              )}
-            </span>
-          </div>
-        </SystemWindow>
-      ) : (
         <QuestWindow
           tag="DAILY QUEST"
           title={day === today ? 'Sharpen the blade today' : `Daily quests · ${formatDay(day, today)}`}
@@ -353,8 +308,7 @@ function DailyTab({ onBacklog }: { onBacklog: () => void }) {
             </>
           }
         />
-      )}
-      <HistoryStrip title="Last 14 days" cells={history} note="Days count the quests you chose for them. Hover a missed day to see why." />
+      <HistoryStrip title="Last 14 days" cells={history} note="Days count the quests you planned for them. Hover a missed day to see why." />
       <MissBreakdownPanel />
       {(log.length > 0 || penaltiesActive(state)) && <PenaltyLog entries={log} />}
     </div>

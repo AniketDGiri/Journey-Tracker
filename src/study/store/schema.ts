@@ -131,6 +131,10 @@ export function migrate(raw: unknown): AppState {
       : emptyNutrition(),
     achievements: (isObj(payload.achievements) ? payload.achievements : {}) as AppState['achievements'],
     questPlan: cleanQuestPlan(payload.questPlan),
+    // Plan quests arrived later: they start today for an existing journey, so past days are never re-judged.
+    planQuestsSince: isDayKey(payload.planQuestsSince) ? payload.planQuestsSince : toDayKey(new Date()),
+    // Likewise plan-only daily quests: track quests stop from the first load with this version on.
+    planOnlySince: isDayKey(payload.planOnlySince) ? payload.planOnlySince : toDayKey(new Date()),
     missReasons: cleanMissReasons(payload.missReasons),
     lifeMissReasons: cleanMissReasons(payload.lifeMissReasons),
     // The backlog arrived later: an existing journey looks back two weeks (never before penalties began).
@@ -170,7 +174,7 @@ function cleanQuestPlan(v: unknown): Record<string, string[]> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
-const MISS_KINDS = new Set(['work', 'commitments', 'health', 'travel', 'energy', 'planning', 'other']);
+const MISS_KINDS =new Set(['work', 'commitments', 'health', 'travel', 'energy', 'planning', 'other']);
 
 function cleanMissReasons(v: unknown): AppState['missReasons'] {
   if (!isObj(v)) return undefined;

@@ -82,6 +82,8 @@ export function createEmptyState(now: Date = new Date(), starterDomains: Domain[
     nutrition: emptyNutrition(),
     achievements: {},
     backlogSince: toDayKey(now),
+    planQuestsSince: toDayKey(now),
+    planOnlySince: toDayKey(now),
     settings: { ...structuredClone(DEFAULT_SETTINGS), penaltiesSince: toDayKey(now) },
   };
 }

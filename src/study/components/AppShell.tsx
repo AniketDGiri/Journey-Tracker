@@ -3,6 +3,7 @@ import {
   BarChart3,
   Binary,
   Boxes,
+  CalendarRange,
   Clock,
   Crown,
   Dumbbell,
@@ -36,6 +37,7 @@ const GROUPS: { id: Group; label: string }[] = [
 ];
 
 const NAV: { route: Route; label: string; icon: typeof LayoutGrid; group: Group }[] = [
+  { route: 'plan', label: 'Week Plan', icon: CalendarRange, group: 'study' },
   { route: 'quests', label: 'Quests', icon: Swords, group: 'study' },
   { route: 'dsa', label: 'DSA & Java', icon: Binary, group: 'study' },
   { route: 'hld', label: 'System Design', icon: Network, group: 'study' },
@@ -51,6 +53,9 @@ const NAV: { route: Route; label: string; icon: typeof LayoutGrid; group: Group 
   { route: 'nutrition', label: 'Nutrition', icon: Utensils, group: 'life' },
   { route: 'settings', label: 'Settings', icon: Settings2, group: 'system' },
 ];
+
+// The phone bar has five slots; Week Plan lives in the More menu there.
+const BOTTOM_NAV: Route[] = ['quests', 'dsa', 'hld', 'lld', 'revision'];
 
 // Study actions (sessions, logging) belong to the study pages only.
 const STUDY_ROUTES = new Set(NAV.filter((n) => n.group === 'study').map((n) => n.route));
@@ -209,7 +214,7 @@ export function AppShell({ children, actions, menuExtras }: { children: ReactNod
               {more && (
                 <div className="absolute right-0 top-11 z-30 max-h-[calc(100vh-4.5rem)] w-52 overflow-y-auto overscroll-contain rounded-xl border border-line-strong bg-surface p-1.5 shadow-2xl [max-height:calc(100dvh-4.5rem)]" onClick={() => setMore(false)}>
                   {navItems
-                    .filter((n) => ['sessions', 'dashboard', 'analytics', 'life', 'personal', 'time', 'workout', 'nutrition', 'settings'].includes(n.route))
+                    .filter((n) => ['plan', 'sessions', 'dashboard', 'analytics', 'life', 'personal', 'time', 'workout', 'nutrition', 'settings'].includes(n.route))
                     .map(({ route: r, label, icon: Icon }) => (
                       <a key={r} href={`#/${r}`} className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-ink-soft hover:bg-surface-2 hover:text-ink">
                         <Icon size={16} aria-hidden="true" /> {label}
@@ -251,7 +256,7 @@ export function AppShell({ children, actions, menuExtras }: { children: ReactNod
 
       {/* Mobile bottom nav */}
       <nav aria-label="Primary" className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-void/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        {NAV.slice(0, 5).map(({ route: r, label, icon: Icon }) => (
+        {NAV.filter((n) => BOTTOM_NAV.includes(n.route)).map(({ route: r, label, icon: Icon }) => (
           <a
             key={r}
             href={`#/${r}`}

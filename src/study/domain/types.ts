@@ -301,6 +301,13 @@ export interface AppState {
    * entry shows every quest; an entry — even an empty one — shows only those.
    */
   questPlan?: Record<DayKey, string[]>;
+  /** Plan-driven quests (do what you planned: day, week, month) apply from this day on, never retroactively. */
+  planQuestsSince?: DayKey;
+  /**
+   * From this day on, daily quests come only from Week Plan (planned items and revisions):
+   * the weekly rhythm's automatic track quests stop. Earlier days keep the quests they had.
+   */
+  planOnlySince?: DayKey;
   /** Why a day's daily quests were left unfinished, in the player's words (see engine/missed). */
   missReasons?: Record<DayKey, MissReason>;
   /** The same, for the Life Daily Quest (training, nutrition, side quests). */

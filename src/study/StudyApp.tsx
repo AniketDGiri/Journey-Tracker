@@ -12,6 +12,7 @@ import { Workspace } from './views/Workspace';
 import { Revision } from './views/Revision';
 import { StudyTime } from './views/StudyTime';
 import { Quests } from './views/Quests';
+import { WeekPlan } from './views/WeekPlan';
 import { Analytics } from './views/Analytics';
 import { Settings } from './views/Settings';
 import { LogSheet } from './components/sheets/LogSheet';
@@ -167,6 +168,8 @@ function Routes() {
       return <Revision />;
     case 'sessions':
       return <StudyTime />;
+    case 'plan':
+      return <WeekPlan />;
     case 'quests':
       return <Quests />;
     case 'analytics':

@@ -7,7 +7,7 @@ import { dueBucket, daysOverdue, revisionQueues } from '../engine/revision';
 import { evaluateGoals } from '../engine/plan';
 import { computeBacklog, remaining } from '../engine/backlog';
 import { ACHIEVEMENTS, evaluateAchievements } from '../engine/achievements';
-import { availableDailyQuests, focusOf, STUDY_TRACKS } from '../engine/quests';
+import { availableDailyQuests, focusOf, planOnly, STUDY_TRACKS } from '../engine/quests';
 import { minutesByDay } from '../engine/studytime';
 import { dayTotals } from '../engine/nutrition';
 import { getPhase } from '../engine/fitness';
@@ -100,6 +100,13 @@ export function buildMirror(state: AppState, personal: PersonalData, today: DayK
   const life = lifeSummary(state, tasks, today);
   const quests = availableDailyQuests(state, today);
 
+  // A day's focus: the rhythm's tracks on older days, the areas of its planned items on Week Plan days.
+  const AREA = { dsa: 'DSA', hld: 'HLD', lld: 'LLD' } as const;
+  const focusLabel = (d: string) =>
+    planOnly(state, d)
+      ? [...new Set(goals.filter((v) => v.item && v.goal.period === 'day' && v.goal.start === d).map((v) => AREA[v.item!.domain]))].join(', ')
+      : focusOf(state, d).map((t) => STUDY_TRACKS.find((x) => x.id === t)?.label ?? t).join(', ');
+
   // ── Daily: one row per day of the journey ──
   const firstDay = [state.createdAt.slice(0, 10), ...state.activity.map((a) => a.date)].filter((d) => d <= today).sort()[0] ?? today;
   const start = firstDay < addDays(today, -730) ? addDays(today, -730) : firstDay;
@@ -120,7 +127,7 @@ export function buildMirror(state: AppState, personal: PersonalData, today: DayK
       return [
         d,
         shortWeekday(d),
-        focusOf(state, d).map((t) => STUDY_TRACKS.find((x) => x.id === t)?.label ?? t).join(', '),
+        focusLabel(d),
         streak.marks.get(d) ?? '',
         minutes.get(d) ?? 0,
         count('solve'),
@@ -149,7 +156,7 @@ export function buildMirror(state: AppState, personal: PersonalData, today: DayK
     ['Studied today', streak.activeToday ? 'Yes' : 'No'],
     ['Study minutes today', minutes.get(today) ?? 0],
     ['Daily study-time goal (min)', state.settings.targets.minutesPerDay],
-    ["Today's focus", focusOf(state, today).map((t) => STUDY_TRACKS.find((x) => x.id === t)?.label ?? t).join(', ') || 'Rest / revision'],
+    ["Today's focus", focusLabel(today) || 'Rest / revision'],
     ['Revisions overdue', queues.overdue.length],
     ['Revisions due today', queues.today.length],
     ['Revisions upcoming (7 days)', queues.upcoming.length],
