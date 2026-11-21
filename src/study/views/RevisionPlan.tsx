@@ -36,6 +36,7 @@ export function RevisionPlan() {
   const [domain, setDomain] = useState<'all' | Domain>('all');
   const [show, setShow] = useState<Show>('unplanned');
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<'recent' | 'least'>('recent');
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [other, setOther] = useState('');
 
@@ -59,8 +60,14 @@ export function RevisionPlan() {
       .filter((it) => domain === 'all' || it.domain === domain)
       .filter((it) => (show === 'all' ? true : show === 'planned' ? !!it.review.nextReviewAt : !it.review.nextReviewAt))
       .filter((it) => !q || it.title.toLowerCase().includes(q) || (topicName.get(it.topicId) ?? '').toLowerCase().includes(q))
-      .sort((a, b) => (b.review.lastStudiedAt ?? '').localeCompare(a.review.lastStudiedAt ?? '') || a.title.localeCompare(b.title));
-  }, [completed, domain, show, query, topicName]);
+      .sort(
+        (a, b) =>
+          // Least revised first: fewest revisions, then the one revised longest ago.
+          (sort === 'least' ? a.review.history.length - b.review.history.length || (a.review.lastReviewedAt ?? '').localeCompare(b.review.lastReviewedAt ?? '') : 0) ||
+          (b.review.lastStudiedAt ?? '').localeCompare(a.review.lastStudiedAt ?? '') ||
+          a.title.localeCompare(b.title),
+      );
+  }, [completed, domain, show, query, topicName, sort]);
 
   const plan = (ids: string[], date: DayKey | null) => {
     if (!ids.length) return;
@@ -192,6 +199,16 @@ export function RevisionPlan() {
               { value: 'lld', label: 'LLD' },
             ]}
           />
+          <Segmented
+            label="Sort"
+            size="sm"
+            value={sort}
+            onChange={setSort}
+            options={[
+              { value: 'recent', label: 'Recently completed' },
+              { value: 'least', label: 'Least revised first' },
+            ]}
+          />
           <label className="relative ml-auto min-w-0 flex-[0_1_260px]">
             <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or topic" aria-label="Search completed items" className="st-input h-8 w-full pl-8 text-sm" />
@@ -242,11 +259,53 @@ export function RevisionPlan() {
   );
 }
 
+// The gauge's pointed ends (as in a game HP bar). The frame and the track share it, the track inset by 2px.
+const GAUGE_SHAPE = 'polygon(7px 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%, 7px 100%, 0 50%)';
+
+/**
+ * How many times an item has been revised, as a segmented gauge: one cell per revision up to
+ * the end of the revision ladder. Amber while it's still being built, green once it's full.
+ */
+export function RevisionGauge({ count, target, className }: { count: number; target: number; className?: string }) {
+  const full = count >= target;
+  const extra = Math.max(0, count - target);
+  return (
+    <span className={cn('flex items-center gap-2', className)}>
+      <span
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={target}
+        aria-valuenow={Math.min(count, target)}
+        aria-label={`Revised ${count} time${count === 1 ? '' : 's'} of ${target}`}
+        title={`Revised ${count}× — ${full ? 'the whole ladder is done' : `${target - count} more to finish the ladder`}`}
+        className={cn('relative block h-[18px] w-[150px] shrink-0', full ? 'bg-jade/80' : count ? 'bg-jade/55' : 'bg-line-strong')}
+        style={{ clipPath: GAUGE_SHAPE }}
+      >
+        <span className="absolute inset-[2px] flex gap-[2px] bg-void px-[7px] py-[2px]" style={{ clipPath: GAUGE_SHAPE }}>
+          {Array.from({ length: target }, (_, i) => (
+            <span
+              key={i}
+              className={cn('flex-1 rounded-[1px]', i < count ? (full ? 'text-jade' : 'text-ember') : 'text-jade/10')}
+              // Thin vertical stripes in the cell's colour, like the reference bar.
+              style={{ backgroundImage: 'repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 4px)', backgroundColor: i < count ? 'transparent' : 'currentColor' }}
+            />
+          ))}
+        </span>
+      </span>
+      <span className={cn('num w-12 shrink-0 text-[11px]', full ? 'text-jade' : count ? 'text-ember-soft' : 'text-ink-faint')}>
+        {Math.min(count, target)}/{target}
+        {extra > 0 && <span className="text-jade"> +{extra}</span>}
+      </span>
+    </span>
+  );
+}
+
 function CompletedRow({ item: it, topic, picked, onPick, weekend, onPlan }: { item: PracticeItem; topic: string; picked: boolean; onPick: () => void; weekend: DayKey[]; onPlan: (d: DayKey | null) => void }) {
-  const { today } = useStore();
+  const { state, today } = useStore();
   const { open } = useUI();
   const next = it.review.nextReviewAt;
   const revised = it.review.history.length;
+  const ladder = state.settings.intervals.length;
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5">
       <input type="checkbox" checked={picked} onChange={onPick} aria-label={`Select “${it.title}”`} className="h-4 w-4 shrink-0 accent-violet" />
@@ -260,9 +319,10 @@ function CompletedRow({ item: it, topic, picked, onPick, weekend, onPlan }: { it
         <p className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-ink-muted">
           {topic && <span>{topic}</span>}
           {it.review.firstStudiedAt && <span>· completed {inline(it.review.firstStudiedAt, today)}</span>}
-          <span>· {revised ? `revised ${revised}× · last ${inline(it.review.lastReviewedAt ?? today, today)}` : 'never revised'}</span>
+          <span>· {revised ? `last revised ${inline(it.review.lastReviewedAt ?? today, today)}` : 'never revised'}</span>
         </p>
       </div>
+      <RevisionGauge count={revised} target={ladder} />
       {next ? (
         <span className={cn('flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs', next < today ? 'border-rose/50 text-rose' : 'border-arc-soft/60 text-arc-soft')}>
           <CalendarDays size={12} aria-hidden="true" />
