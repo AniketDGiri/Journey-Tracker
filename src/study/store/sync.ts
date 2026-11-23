@@ -1,5 +1,6 @@
 import type { AppState } from '../domain/types';
 import { run, type Ctx } from '../engine/actions';
+import { migrate } from './schema';
 
 /** A change made in this tab that the server has not acknowledged yet. */
 export interface Pending {
@@ -78,6 +79,29 @@ export function absorbLegacy(state: AppState, legacy: AppState, since: string): 
     achievements: { ...legacy.achievements, ...state.achievements },
   };
   return added ? { state: next, added } : { state, added: 0 };
+}
+
+/**
+ * Reads what an old copy of the app saved. Upgrading it (schema migrations) stamps the
+ * cards it moves or adds with the current time, which would make a stale copy look newer
+ * than this one and let `absorbLegacy` overwrite real progress with it (DSA cards moved
+ * into patterns lost their status this way). So every card keeps the timestamps it was
+ * saved with, and cards the upgrade itself created count as never changed there.
+ */
+export function migrateLegacy(raw: unknown): AppState {
+  const state = migrate(raw);
+  const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+  const payload = obj(raw) && obj(raw.data) && raw.app === 'ascend' ? raw.data : raw;
+  const saved = new Map<string, Record<string, unknown>>();
+  if (obj(payload) && Array.isArray(payload.items)) for (const i of payload.items) if (obj(i) && typeof i.id === 'string') saved.set(i.id, i);
+  const stamp = (v: unknown) => (typeof v === 'string' ? v : '');
+  return {
+    ...state,
+    items: state.items.map((i) => {
+      const o = saved.get(i.id);
+      return { ...i, createdAt: o ? stamp(o.createdAt) : '', updatedAt: o ? stamp(o.updatedAt) : '' };
+    }),
+  };
 }
 
 /** What a save acknowledged up to `seq` no longer needs to replay. */

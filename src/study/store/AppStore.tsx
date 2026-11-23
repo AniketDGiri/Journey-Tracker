@@ -10,7 +10,7 @@ import { levelInfo, totalXp, type LevelInfo } from '../engine/progression';
 import { revisionQueues, type RevisionQueues } from '../engine/revision';
 import { ConflictError, LocalStorageAdapter, type StorageAdapter } from './storage';
 import { migrate } from './schema';
-import { absorbLegacy, acknowledged, rebase, staleNotice, type Pending } from './sync';
+import { absorbLegacy, acknowledged, migrateLegacy, rebase, staleNotice, type Pending } from './sync';
 
 export interface Toast {
   id: number;
@@ -112,8 +112,11 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
           setSaveError(undefined);
         })
         .catch((e: unknown) => {
-          if (e instanceof ConflictError) adoptRef.current(e.remote);
-          else setSaveError(e instanceof Error ? e.message : 'Could not save.');
+          if (e instanceof ConflictError) {
+            // Coalesced saves share one error: adopt it once, and not at all if the live feed already did.
+            if (e.fresh && !e.handled) adoptRef.current(e.remote);
+            e.handled = true;
+          } else setSaveError(e instanceof Error ? e.message : 'Could not save.');
         });
     },
     [storage],
@@ -144,7 +147,7 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
     if (!raw) return;
     let legacy: AppState;
     try {
-      legacy = migrate(raw);
+      legacy = migrateLegacy(raw);
     } catch {
       return;
     }
@@ -210,13 +213,24 @@ export function AppStoreProvider({ children, adapter }: { children: ReactNode; a
     const flush = () => storage.flush?.();
     const hide = () => document.visibilityState === 'hidden' && flush();
     const online = () => pendingRef.current.length > 0 && persist(stateRef.current);
+    // Closing while a change is on its way: send it now and ask the browser to wait. (If the page
+    // closes anyway, the change is kept in this browser and saved on the next load.)
+    const leaving = (e: BeforeUnloadEvent) => {
+      if (!storage.hasUnsaved?.()) return;
+      flush();
+      e.preventDefault();
+    };
     document.addEventListener('visibilitychange', hide);
     window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', leaving);
     window.addEventListener('online', online);
     return () => {
       stop?.();
+      // Leaving the study side (or signing out) must not strand a change waiting on its timer.
+      flush();
       document.removeEventListener('visibilitychange', hide);
       window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', leaving);
       window.removeEventListener('online', online);
     };
   }, [status, storage, persist]);

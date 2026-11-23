@@ -19,13 +19,22 @@ export interface StorageAdapter {
   subscribe?(onRemote: (raw: unknown) => void, onRetired?: (raw: unknown, since: string) => void): () => void;
   /** A message for the player from the last load, once. */
   takeNotice?(): string | undefined;
+  /** True while a change is still waiting to reach the server. */
+  hasUnsaved?(): boolean;
 }
 
-/** Another tab or device saved first: `remote` is what it saved, at revision `rev`. */
+/**
+ * Another tab or device saved first: `remote` is what it saved, at revision `rev`.
+ * `fresh` is false when the tab already received that save through the live feed (and
+ * rebased on it), so it must not be adopted twice. Every coalesced save rejects with the
+ * same error; `handled` lets the store adopt it once.
+ */
 export class ConflictError extends Error {
+  handled = false;
   constructor(
     public remote: unknown,
     public rev: number,
+    public fresh = true,
   ) {
     super('Changed on another device.');
   }
