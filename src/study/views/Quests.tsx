@@ -3,9 +3,10 @@ import { Award, CalendarRange, Check, ChevronLeft, ChevronRight, Crown, Flame, L
 import { openPlanDay } from './WeekPlan';
 import { useStore } from '../store/AppStore';
 import { useUI } from '../store/ui';
-import { STUDY_TRACKS, dailyQuests, focusOf, isPlannedQuest, missions, planOnly, monthlyChallenges, requiredOf, weeklyChallenges, type Quest } from '../engine/quests';
+import { PLANNED_PREFIX, STUDY_TRACKS, dailyQuests, focusOf, isPlannedQuest, missions, planOnly, monthlyChallenges, requiredOf, weeklyChallenges, type Quest } from '../engine/quests';
 import type { AppState } from '../domain/types';
-import { claimQuest } from '../engine/actions';
+import { ActionError, claimQuest, logProgress, onDay, stepDoneOn, toggleSubItem } from '../engine/actions';
+import { isLearned } from '../engine/revision';
 import { bossStatuses } from '../engine/bosses';
 import { ACHIEVEMENTS, ACHIEVEMENT_GROUPS, evaluateAchievements } from '../engine/achievements';
 import { RANKS, totalXpForLevel } from '../engine/progression';
@@ -42,10 +43,51 @@ const totalOf = (qs: Quest[]) => requiredOf(qs).length;
 
 // ── Quest objectives (System style) ─────────────────────────────────────
 
+/** The plan entry behind a planned-item quest, so it can be marked done right here. */
+function plannedTarget(state: AppState, q: Quest): { itemId: string; subItemId?: string; title: string } | undefined {
+  if (!isPlannedQuest(q)) return undefined;
+  const goal = state.goals.find((g) => `${PLANNED_PREFIX}${g.id}` === q.id);
+  const item = goal && state.items.find((i) => i.id === goal.itemId);
+  if (!goal || !item) return undefined;
+  if (goal.subItemId) {
+    const sub = item.subItems?.find((s) => s.id === goal.subItemId);
+    return sub && !sub.done ? { itemId: item.id, subItemId: sub.id, title: sub.title } : undefined;
+  }
+  return { itemId: item.id, title: item.title };
+}
+
 /** One quest as a System objective: check, title, progress and its action or reward. */
 function Objective({ q, day }: { q: Quest; day?: string }) {
-  const { state, act } = useStore();
+  const { state, act, today, toast } = useStore();
   const { open, navigate } = useUI();
+  const markDone = plannedTarget(state, q);
+  const canMark = !!markDone && !q.complete && (!day || day <= today);
+  const finish = () => {
+    if (!markDone) return;
+    const { itemId, subItemId, title } = markDone;
+    const on = day && day < today ? day : undefined;
+    const before = state.items.find((i) => i.id === itemId);
+    const fb = act(
+      (s, ctx) => {
+        const c = on ? onDay(on, ctx) : ctx;
+        if (subItemId) return on ? stepDoneOn(s, itemId, subItemId, on, ctx) : toggleSubItem(s, itemId, subItemId, c);
+        const it = s.items.find((i) => i.id === itemId);
+        if (!it) throw new ActionError('That item no longer exists.');
+        // Not finished yet: complete it. Already finished earlier: record today's work on it.
+        return isLearned(it) ? logProgress(s, itemId, { practiced: true }, c) : logProgress(s, itemId, { status: 'independent' }, c);
+      },
+      { silent: true },
+    );
+    if (!fb) return;
+    // Undo puts it back exactly as it was (completion record and XP go too).
+    const undo =
+      subItemId
+        ? () => act((s, ctx) => toggleSubItem(s, itemId, subItemId, ctx), { success: 'Undone' })
+        : before && !isLearned(before)
+          ? () => act((s, ctx) => logProgress(s, itemId, { status: before.status }, on ? onDay(on, ctx) : ctx), { success: 'Undone' })
+          : undefined;
+    toast({ tone: 'success', title: `Done: ${title}`, detail: fb.xp > 0 ? `+${fb.xp} XP` : undefined, action: undo ? { label: 'Undo', run: undo } : undefined });
+  };
   const go = () => {
     const a = q.action;
     if (!a) return;
@@ -87,10 +129,19 @@ function Objective({ q, day }: { q: Quest; day?: string }) {
         </Button>
       ) : q.complete ? (
         <span className="text-xs text-jade">Done</span>
-      ) : q.action ? (
-        <Button size="sm" variant="secondary" onClick={go}>
-          {q.action.type === 'log' ? 'Log' : q.action.type === 'revise' ? 'Revise' : 'Go'}
-        </Button>
+      ) : q.action || canMark ? (
+        <div className="flex shrink-0 items-center gap-1.5">
+          {q.action && (
+            <Button size="sm" variant={canMark ? 'ghost' : 'secondary'} onClick={go}>
+              {q.action.type === 'log' ? 'Log' : q.action.type === 'revise' ? 'Revise' : 'Go'}
+            </Button>
+          )}
+          {canMark && (
+            <Button size="sm" variant="secondary" onClick={finish} aria-label={`Mark “${markDone!.title}” done`} title={day && day < today ? `Mark done on ${formatDay(day, today)}` : 'Mark done'}>
+              <Check size={14} aria-hidden="true" /> Done
+            </Button>
+          )}
+        </div>
       ) : (
         <span className="num text-[11px] text-violet-soft">+{q.reward}</span>
       )}
