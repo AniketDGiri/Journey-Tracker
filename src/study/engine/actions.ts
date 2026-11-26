@@ -47,6 +47,8 @@ export interface Feedback {
   levelUp?: number;
   rankUp?: string;
   achievements: string[];
+  /** Achievements this action took back (it undid what earned them). */
+  revoked: string[];
   messages: string[];
 }
 
@@ -679,11 +681,35 @@ export function recordBossAttempt(
   return { state: r.state, attempt, reward: r.amount };
 }
 
-export function syncAchievements(state: AppState, ctx: Ctx): { state: AppState; earned: string[] } {
+/**
+ * Unlocks what is newly earned. With `prev` (the state before the action), it also takes back
+ * achievements the action itself un-earned — an undone completion, step or claim — together
+ * with their XP. Only ones unlocked within the undo window (today or yesterday) are taken back,
+ * and only when this action is what made them unmet: measures that drift with time (mastery
+ * decay, streaks, the backlog) are judged on the same day before and after, so they never
+ * cost an old achievement.
+ */
+export function syncAchievements(state: AppState, ctx: Ctx, prev?: AppState): { state: AppState; earned: string[]; revoked: string[] } {
   const streak = computeStreak(state, ctx.today);
   const results = evaluateAchievements({ state, today: ctx.today, streak });
   let next = state;
   const earned: string[] = [];
+  const revoked: string[] = [];
+  if (prev) {
+    const since = addDays(ctx.today, -UNDO_DAYS);
+    const recent = ACHIEVEMENTS.filter((a) => (state.achievements[a.id] ?? '') >= since);
+    let prevStreak: ReturnType<typeof computeStreak> | undefined;
+    for (const def of recent) {
+      const now = results.find((r) => r.id === def.id);
+      if (!now || now.earned) continue;
+      prevStreak ??= computeStreak(prev, ctx.today);
+      const [was, target] = def.measure({ state: prev, today: ctx.today, streak: prevStreak });
+      if (was < target) continue;
+      const { [def.id]: _gone, ...rest } = next.achievements;
+      next = reverseXp({ ...next, achievements: rest }, 'achievement', def.id, `Achievement taken back · ${def.name}`, ctx);
+      revoked.push(def.name);
+    }
+  }
   for (const r of results) {
     if (r.earned && !next.achievements[r.id]) {
       const def = ACHIEVEMENTS.find((a) => a.id === r.id)!;
@@ -692,7 +718,7 @@ export function syncAchievements(state: AppState, ctx: Ctx): { state: AppState; 
       earned.push(def.name);
     }
   }
-  return { state: next, earned };
+  return { state: next, earned, revoked };
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────
@@ -717,7 +743,7 @@ export function updateSettings(state: AppState, patch: Partial<Settings>): AppSt
 export function run(state: AppState, fn: (s: AppState) => AppState, ctx: Ctx): { state: AppState; feedback: Feedback } {
   const before = levelInfo(totalXp(state));
   const mid = fn(state);
-  const synced = mid === state ? { state: mid, earned: [] } : syncAchievements(mid, ctx);
+  const synced = mid === state ? { state: mid, earned: [], revoked: [] } : syncAchievements(mid, ctx, state);
   // Finished days are judged here too, so penalties and Penalty Zone recoveries land as soon as they're due.
   const judged = syncPenalties(synced.state, ctx);
   const next = judged.state;
@@ -730,6 +756,7 @@ export function run(state: AppState, fn: (s: AppState) => AppState, ctx: Ctx): {
       levelUp: after.level > before.level ? after.level : undefined,
       rankUp: after.rank.name !== before.rank.name ? after.rank.name : undefined,
       achievements: earned,
+      revoked: synced.revoked,
       messages: judged.messages,
     },
   };

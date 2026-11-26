@@ -220,7 +220,7 @@ export function availableDailyQuests(state: AppState, today: DayKey): Quest[] {
           id: `${PLANNED_PREFIX}${v.goal.id}`,
           domain: v.item.domain,
           title: v.parent ? `${v.title} · ${v.parent}` : v.title,
-          detail: v.subItem ? 'A planned step — tick it when it’s done.' : 'Planned in Week Plan. Log real work on it to complete.',
+          detail: v.subItem ? 'A planned step — tick it when it’s done.' : 'Planned in Week Plan. Mark it done, or log the work.',
           progress: v.completedOn && v.completedOn <= today ? 1 : 0,
           target: 1,
           action: v.subItem ? { type: 'navigate', to: v.item.domain } : { type: 'log', domain: v.item.domain },

@@ -53,7 +53,12 @@ const backlogCategoriesCleared = (s: AppState, today: DayKey) => new Set(compute
 
 const studyMinutes =(s: AppState) => s.sessions.reduce((n, x) => n + x.durationMin, 0);
 
-const claimed = (s: AppState, type: 'quest' | 'weekly') => s.xp.filter((x) => x.type === type).length;
+/** Claims still standing: a claim taken back (its quest was undone) has a reversing entry and no longer counts. */
+const claimed = (s: AppState, type: 'quest' | 'weekly') => {
+  const net = new Map<string, number>();
+  for (const x of s.xp) if (x.type === type) net.set(x.ref, (net.get(x.ref) ?? 0) + x.amount);
+  return [...net.values()].filter((n) => n > 0).length;
+};
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   // ── Items ──────────────────────────────────────────────────────────────

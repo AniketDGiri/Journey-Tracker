@@ -44,14 +44,14 @@ const totalOf = (qs: Quest[]) => requiredOf(qs).length;
 // ── Quest objectives (System style) ─────────────────────────────────────
 
 /** The plan entry behind a planned-item quest, so it can be marked done right here. */
-function plannedTarget(state: AppState, q: Quest): { itemId: string; subItemId?: string; title: string } | undefined {
+function plannedTarget(state: AppState, q: Quest): { itemId: string; subItemId?: string; title: string; stepDone?: boolean } | undefined {
   if (!isPlannedQuest(q)) return undefined;
   const goal = state.goals.find((g) => `${PLANNED_PREFIX}${g.id}` === q.id);
   const item = goal && state.items.find((i) => i.id === goal.itemId);
   if (!goal || !item) return undefined;
   if (goal.subItemId) {
     const sub = item.subItems?.find((s) => s.id === goal.subItemId);
-    return sub && !sub.done ? { itemId: item.id, subItemId: sub.id, title: sub.title } : undefined;
+    return sub ? { itemId: item.id, subItemId: sub.id, title: sub.title, stepDone: sub.done } : undefined;
   }
   return { itemId: item.id, title: item.title };
 }
@@ -61,7 +61,7 @@ function Objective({ q, day }: { q: Quest; day?: string }) {
   const { state, act, today, toast } = useStore();
   const { open, navigate } = useUI();
   const markDone = plannedTarget(state, q);
-  const canMark = !!markDone && !q.complete && (!day || day <= today);
+  const canMark = !!markDone && !markDone.stepDone && !q.complete && (!day || day <= today);
   const finish = () => {
     if (!markDone) return;
     const { itemId, subItemId, title } = markDone;
@@ -111,7 +111,22 @@ function Objective({ q, day }: { q: Quest; day?: string }) {
         <div className="flex items-center gap-2">
           {q.domain && <DomainTag domain={q.domain} />}
           {q.bonus && <Badge tone="ember">Bonus</Badge>}
-          <p className={cn('truncate text-sm', q.claimed ? 'text-ink-muted line-through decoration-ink-faint' : 'text-ink')}>{q.title}</p>
+          {markDone ? (
+            // Opens the item itself: whatever is changed there shows everywhere the item appears.
+            <button
+              type="button"
+              onClick={() => open({ type: 'item', itemId: markDone.itemId })}
+              title="Open to view or update"
+              className={cn(
+                'min-w-0 truncate text-left text-sm underline-offset-4 hover:underline focus-visible:underline',
+                q.claimed ? 'text-ink-muted line-through decoration-ink-faint' : 'text-ink hover:text-violet-soft',
+              )}
+            >
+              {q.title}
+            </button>
+          ) : (
+            <p className={cn('truncate text-sm', q.claimed ? 'text-ink-muted line-through decoration-ink-faint' : 'text-ink')}>{q.title}</p>
+          )}
         </div>
         <div className="mt-1.5 flex items-center gap-2">
           <Bar value={q.progress / q.target} tone={q.complete ? 'jade' : 'arc'} className="max-w-[240px]" label={`${q.title} progress`} />
