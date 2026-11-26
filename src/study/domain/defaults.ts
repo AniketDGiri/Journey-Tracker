@@ -2,6 +2,7 @@ import type { AppState, Domain, QuestDays, Settings } from './types';
 import { REAL_STARTER_DOMAINS, buildCatalog } from './catalog';
 import { mergeAlgoCamp } from './algocamp';
 import { applyDsaPatterns } from './dsaPatterns';
+import { applyRisingBrain } from './risingBrain';
 import { emptyNutrition } from './nutrition';
 import { toDayKey } from '../lib/date';
 
@@ -14,7 +15,7 @@ import { toDayKey } from '../lib/date';
  * 7: the AlgoCamp system design course (HLD + LLD) added as cards with lecture steps.
  * 8: the DSA tree is organised by pattern (from the DSA patterns sheet), with its problems as cards.
  */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const emptyFitness = (): AppState['fitness'] => ({ activePhaseId: 'phase-0', starts: {}, logs: [] });
 
@@ -65,7 +66,9 @@ export function createEmptyState(now: Date = new Date(), starterDomains: Domain[
   // A real journey comes with the AlgoCamp course and DSA by pattern; sample data stays as it was.
   const real = starterDomains === REAL_STARTER_DOMAINS;
   const course = real ? mergeAlgoCamp(catalog.topics, catalog.items, iso) : catalog;
-  const { topics, items } = real ? applyDsaPatterns(course.topics, course.items, iso) : course;
+  const patterned = real ? applyDsaPatterns(course.topics, course.items, iso) : course;
+  // DSA is the RisingBrain pattern-wise sheet.
+  const { topics, items } = real ? applyRisingBrain(patterned.topics, patterned.items, [], [], iso) : patterned;
   return {
     schemaVersion: SCHEMA_VERSION,
     mode: 'real',

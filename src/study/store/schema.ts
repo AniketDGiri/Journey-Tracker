@@ -3,6 +3,7 @@ import { DEFAULT_QUEST_DAYS, DEFAULT_SETTINGS, SCHEMA_VERSION, emptyFitness } fr
 import { javaTrack } from '../domain/catalog';
 import { mergeAlgoCamp } from '../domain/algocamp';
 import { applyDsaPatterns } from '../domain/dsaPatterns';
+import { applyRisingBrain } from '../domain/risingBrain';
 import { emptyNutrition } from '../domain/nutrition';
 import { addDays, isDayKey, toDayKey } from '../lib/date';
 
@@ -100,6 +101,16 @@ export function migrate(raw: unknown): AppState {
     itemList = merged.items;
   }
 
+  // v8 → v9: DSA becomes the RisingBrain sheet. Your matching cards keep their progress, anything
+  // you completed or worked on is kept, untouched cards outside the sheet go (with their plan entries). Once.
+  let goalList = cleanGoals(payload.goals);
+  if (version < 9 && mode === 'real') {
+    const swapped = applyRisingBrain(topicList, itemList, goalList, activity, new Date().toISOString());
+    topicList = swapped.topics;
+    itemList = swapped.items;
+    goalList = swapped.goals;
+  }
+
   return {
     schemaVersion: SCHEMA_VERSION,
     mode,
@@ -112,7 +123,7 @@ export function migrate(raw: unknown): AppState {
     sessions: (Array.isArray(payload.sessions) ? payload.sessions : []) as AppState['sessions'],
     activeSession: isObj(payload.activeSession) ? (payload.activeSession as unknown as AppState['activeSession']) : undefined,
     bossAttempts: (Array.isArray(payload.bossAttempts) ? payload.bossAttempts : []) as AppState['bossAttempts'],
-    goals: cleanGoals(payload.goals),
+    goals: goalList,
     // v3 → v4: training phases and nutrition tracking.
     fitness: isObj(payload.fitness)
       ? ({

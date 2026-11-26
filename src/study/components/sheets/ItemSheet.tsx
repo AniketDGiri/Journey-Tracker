@@ -135,10 +135,19 @@ export function ItemSheet({ itemId }: { itemId: string }) {
               </span>
             </>
           )}
-          {item.url && (
-            <a href={item.url} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-violet-soft hover:underline">
-              Open link <ExternalLink size={12} aria-hidden="true" />
-            </a>
+          {(item.url || item.links?.length) && (
+            <span className="ml-auto inline-flex flex-wrap items-center gap-3">
+              {item.url && (
+                <a href={item.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-violet-soft hover:underline">
+                  {item.links?.length ? (/leetcode\.com/.test(item.url) ? 'LeetCode' : 'Open link') : 'Open link'} <ExternalLink size={12} aria-hidden="true" />
+                </a>
+              )}
+              {item.links?.map((l) => (
+                <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-violet-soft hover:underline">
+                  {l.label} <ExternalLink size={12} aria-hidden="true" />
+                </a>
+              ))}
+            </span>
           )}
         </div>
         <Bar value={mastery / 100} label="Item mastery" />

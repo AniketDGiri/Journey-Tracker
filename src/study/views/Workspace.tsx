@@ -34,7 +34,12 @@ export function Workspace({ domain }: { domain: Domain }) {
   const [explain, setExplain] = useState(false);
 
   const items = useMemo(() => state.items.filter((i) => i.domain === domain), [state.items, domain]);
-  const topics = useMemo(() => state.topics.filter((t) => t.domain === domain).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name)), [state.topics, domain]);
+  // DSA follows the RisingBrain sheet's own order (easy patterns first within each area); other domains sort by name within a tier.
+  const topics = useMemo(() => {
+    const own = state.topics.filter((t) => t.domain === domain);
+    const pos = new Map(own.map((t, i) => [t.id, i]));
+    return own.sort((a, b) => a.tier - b.tier || (domain === 'dsa' ? pos.get(a.id)! - pos.get(b.id)! : a.name.localeCompare(b.name)));
+  }, [state.topics, domain]);
   const topicName = useMemo(() => new Map(topics.map((t) => [t.id, t.name])), [topics]);
   const topicOrder = useMemo(() => new Map(topics.map((t, i) => [t.id, i])), [topics]);
 

@@ -96,6 +96,8 @@ export interface PracticeItem {
   title: string;
   difficulty?: Difficulty;
   url?: string;
+  /** More links beside `url` (a GFG version, a video walkthrough). */
+  links?: { label: string; url: string }[];
   status: ItemStatus;
   /** 0 = unrated, 1–5 self-assessed confidence. */
   confidence: number;

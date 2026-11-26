@@ -33,6 +33,12 @@ const learned = (s: AppState) => s.items.filter(isLearned);
 const solvedIn = (s: AppState, topicId?: string) =>
   s.items.filter((i) => i.domain === 'dsa' && i.kind === 'problem' && isLearned(i) && (!topicId || i.topicId === topicId)).length;
 
+/** Solved in a whole area of the RisingBrain sheet ("Graph · BFS Pattern", "Graph · Dijkstra", …), plus its older topic ids. */
+const solvedInArea = (s: AppState, area: string, oldIds: string[]) => {
+  const ids = new Set([...oldIds, ...s.topics.filter((t) => t.domain === 'dsa' && t.name.startsWith(`${area} ·`)).map((t) => t.id)]);
+  return s.items.filter((i) => i.domain === 'dsa' && i.kind === 'problem' && isLearned(i) && ids.has(i.topicId)).length;
+};
+
 const stepsDone = (s: AppState) => s.items.reduce((n, i) => n + (i.subItems ?? []).filter((x) => x.done).length, 0);
 
 /** Items broken into steps (at least two) where every step is ticked. */
@@ -80,8 +86,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     measure: ({ state }) => [independentSolves(state, 'hard'), 1],
   },
   { id: 'hard-5', name: 'Giant Slayer', description: 'Solve 5 hard problems independently.', group: 'Items', reward: 3, measure: ({ state }) => [independentSolves(state, 'hard'), 5] },
-  { id: 'graph-explorer', name: 'Graph Explorer', description: 'Solve 5 graph problems.', group: 'Items', measure: ({ state }) => [solvedIn(state, 'dsa-graphs') + solvedIn(state, 'dsa-advanced-graphs'), 5] },
-  { id: 'dp-challenger', name: 'DP Challenger', description: 'Solve 5 dynamic programming problems.', group: 'Items', measure: ({ state }) => [solvedIn(state, 'dsa-dp'), 5] },
+  { id: 'graph-explorer', name: 'Graph Explorer', description: 'Solve 5 graph problems.', group: 'Items', measure: ({ state }) => [solvedInArea(state, 'Graph', ['dsa-graphs', 'dsa-advanced-graphs']), 5] },
+  { id: 'dp-challenger', name: 'DP Challenger', description: 'Solve 5 dynamic programming problems.', group: 'Items', measure: ({ state }) => [solvedInArea(state, 'Dynamic Programming', ['dsa-dp']), 5] },
   {
     id: 'self-reliant',
     name: 'Self-Reliant',
